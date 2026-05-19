@@ -1,0 +1,4 @@
+.env.example
+.env
+start-dev.sh
+node_modules/

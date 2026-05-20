@@ -1,10 +1,54 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { getDb } from '../database.js';
 
 const router = express.Router();
 
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'NO_TOKEN',
+        message: 'No token provided'
+      }
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_TOKEN',
+        message: 'Invalid token'
+      }
+    });
+  }
+};
+
+// Admin-only middleware
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Admin access required'
+      }
+    });
+  }
+  next();
+};
+
 // Get all rooms
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     const rooms = await new Promise((resolve, reject) => {
@@ -87,7 +131,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new room (admin only)
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, capacity, location, description } = req.body;
     
@@ -141,7 +185,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update room (admin only)
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, capacity, location, description } = req.body;
@@ -206,7 +250,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete room (admin only)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     

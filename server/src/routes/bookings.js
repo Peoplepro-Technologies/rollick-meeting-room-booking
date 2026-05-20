@@ -337,7 +337,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
       });
     }
-    
+
+    // Check if user is admin or owns the booking
+    if (req.user.role !== 'admin' && booking.user_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only edit your own bookings'
+        }
+      });
+    }
+
     // Check availability (excluding current booking)
     const conflictingBookings = await new Promise((resolve, reject) => {
       db.all(
@@ -414,6 +425,43 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     const db = getDb();
+    
+    // Check ownership before deleting
+    const booking = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT user_id FROM bookings WHERE id = ?',
+        [id],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(row);
+        }
+      );
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'BOOKING_NOT_FOUND',
+          message: 'Booking not found'
+        }
+      });
+    }
+
+    // Admin can delete any booking, users can only delete their own
+    if (req.user.role !== 'admin' && booking.user_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only delete your own bookings'
+        }
+      });
+    }
+
     const result = await new Promise((resolve, reject) => {
       db.run(
         'DELETE FROM bookings WHERE id = ?',

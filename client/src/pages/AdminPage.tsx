@@ -19,47 +19,99 @@ import {
   IconButton,
   AppBar,
   Toolbar,
+  Tabs,
+  Tab,
+  Chip,
+  Alert,
 } from '@mui/material';
 import { Add, Edit, Delete, ArrowBack } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
+  return (
+    <div hidden={value !== index}>
+      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
+    </div>
+  );
+};
+
+interface RoomRow {
+  id: number;
+  name: string;
+  capacity: number;
+  location: string | null;
+  description: string | null;
+}
+
+interface UserRow {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
 export const AdminPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [tabValue, setTabValue] = useState(0);
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<any>(null);
-  const [formData, setFormData] = useState({
+  const [roomDialogOpen, setRoomDialogOpen] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<RoomRow | null>(null);
+  const [roomFormData, setRoomFormData] = useState({
     name: '',
     capacity: '',
     location: '',
     description: '',
   });
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [userFormData, setUserFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'user',
+  });
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchRooms();
+    fetchData();
   }, []);
 
-  const fetchRooms = async () => {
+  const fetchData = async () => {
     try {
-      const response = await apiClient.getRooms();
-      if (response.success && response.data?.rooms) {
-        setRooms(response.data.rooms);
+      const [roomsRes, usersRes] = await Promise.all([
+        apiClient.getRooms(),
+        apiClient.getUsers(),
+      ]);
+      if (roomsRes.success && roomsRes.data?.rooms) {
+        setRooms(roomsRes.data.rooms);
       }
-    } catch (error) {
-      console.error('Failed to fetch rooms:', error);
+      if (usersRes.success && usersRes.data?.users) {
+        setUsers(usersRes.data.users);
+      }
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDialogOpen = (room?: any) => {
+  // ---------- Room handlers ----------
+  const handleRoomDialogOpen = (room?: RoomRow) => {
     if (room) {
       setEditingRoom(room);
-      setFormData({
+      setRoomFormData({
         name: room.name,
         capacity: room.capacity.toString(),
         location: room.location || '',
@@ -67,36 +119,24 @@ export const AdminPage: React.FC = () => {
       });
     } else {
       setEditingRoom(null);
-      setFormData({
-        name: '',
-        capacity: '',
-        location: '',
-        description: '',
-      });
+      setRoomFormData({ name: '', capacity: '', location: '', description: '' });
     }
-    setDialogOpen(true);
+    setError('');
+    setRoomDialogOpen(true);
   };
 
-  const handleDialogClose = () => {
-    setDialogOpen(false);
+  const handleRoomDialogClose = () => {
+    setRoomDialogOpen(false);
     setEditingRoom(null);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = async () => {
+  const handleRoomSubmit = async () => {
     try {
       const roomData = {
-        name: formData.name,
-        capacity: parseInt(formData.capacity),
-        location: formData.location || null,
-        description: formData.description || null,
+        name: roomFormData.name,
+        capacity: parseInt(roomFormData.capacity),
+        location: roomFormData.location || null,
+        description: roomFormData.description || null,
       };
 
       if (editingRoom) {
@@ -105,24 +145,104 @@ export const AdminPage: React.FC = () => {
         await apiClient.createRoom(roomData);
       }
 
-      await fetchRooms();
-      handleDialogClose();
-    } catch (error) {
-      console.error('Failed to save room:', error);
+      await fetchData();
+      handleRoomDialogClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save room');
     }
   };
 
-  const handleDelete = async (roomId: number) => {
+  const handleRoomDelete = async (roomId: number) => {
     if (window.confirm('Are you sure you want to delete this room?')) {
       try {
         await apiClient.deleteRoom(roomId);
-        await fetchRooms();
-      } catch (error) {
-        console.error('Failed to delete room:', error);
+        await fetchData();
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete room');
       }
     }
   };
 
+  // ---------- User handlers ----------
+  const handleUserDialogOpen = (u?: UserRow) => {
+    if (u) {
+      setEditingUser(u);
+      setUserFormData({
+        username: u.username,
+        email: u.email,
+        password: '',
+        role: u.role,
+      });
+    } else {
+      setEditingUser(null);
+      setUserFormData({ username: '', email: '', password: '', role: 'user' });
+    }
+    setError('');
+    setUserDialogOpen(true);
+  };
+
+  const handleUserDialogClose = () => {
+    setUserDialogOpen(false);
+    setEditingUser(null);
+  };
+
+  const handleUserInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setUserFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleUserSubmit = async () => {
+    if (!userFormData.username.trim() || !userFormData.email.trim()) {
+      setError('Username and email are required');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(userFormData.email)) {
+      setError('Invalid email format');
+      return;
+    }
+
+    try {
+      const payload: any = {
+        username: userFormData.username.trim(),
+        email: userFormData.email.trim(),
+        role: userFormData.role,
+      };
+
+      if (userFormData.password) {
+        payload.password = userFormData.password;
+      }
+
+      if (editingUser) {
+        await apiClient.updateUser(editingUser.id, payload);
+      } else {
+        if (userFormData.role !== 'user' && !userFormData.password) {
+          setError('Password is required for admin users');
+          return;
+        }
+        await apiClient.createUser(payload);
+      }
+
+      await fetchData();
+      handleUserDialogClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save user');
+    }
+  };
+
+  const handleUserDelete = async (userId: number, username: string) => {
+    if (window.confirm(`Delete user "${username}"? Their bookings will also be removed.`)) {
+      try {
+        await apiClient.deleteUser(userId);
+        await fetchData();
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete user');
+      }
+    }
+  };
+
+  // ---------- Render ----------
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -135,8 +255,8 @@ export const AdminPage: React.FC = () => {
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
         <Toolbar>
-          <Button 
-            color="inherit" 
+          <Button
+            color="inherit"
             startIcon={<ArrowBack />}
             onClick={() => navigate('/')}
             sx={{ mr: 2 }}
@@ -156,73 +276,155 @@ export const AdminPage: React.FC = () => {
       </AppBar>
 
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h4">
-            Room Management
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleDialogOpen()}
-          >
-            Add Room
-          </Button>
-        </Box>
+        <Tabs
+          value={tabValue}
+          onChange={(_, v) => { setTabValue(v); setError(''); }}
+          sx={{ mb: 3 }}
+        >
+          <Tab label="Room Management" />
+          <Tab label={`User Management (${users.length})`} />
+        </Tabs>
 
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Capacity</TableCell>
-                <TableCell>Location</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rooms.map((room) => (
-                <TableRow key={room.id}>
-                  <TableCell>{room.name}</TableCell>
-                  <TableCell>{room.capacity}</TableCell>
-                  <TableCell>{room.location || '-'}</TableCell>
-                  <TableCell>{room.description || '-'}</TableCell>
-                  <TableCell>
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleDialogOpen(room)}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(room.id)}
-                    >
-                      <Delete />
-                    </IconButton>
-                  </TableCell>
+        {/* ──── Room Management ──── */}
+        <TabPanel value={tabValue} index={0}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Typography variant="h4">Room Management</Typography>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleRoomDialogOpen()}
+            >
+              Add Room
+            </Button>
+          </Box>
+
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Capacity</TableCell>
+                  <TableCell>Location</TableCell>
+                  <TableCell>Description</TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {rooms.map((room) => (
+                  <TableRow key={room.id} hover>
+                    <TableCell>{room.name}</TableCell>
+                    <TableCell>{room.capacity}</TableCell>
+                    <TableCell>{room.location || '-'}</TableCell>
+                    <TableCell>{room.description || '-'}</TableCell>
+                    <TableCell align="center">
+                      <IconButton color="primary" size="small" onClick={() => handleRoomDialogOpen(room)}>
+                        <Edit />
+                      </IconButton>
+                      <IconButton color="error" size="small" onClick={() => handleRoomDelete(room.id)}>
+                        <Delete />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
 
-        <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="sm" fullWidth>
-          <DialogTitle>
-            {editingRoom ? 'Edit Room' : 'Add New Room'}
-          </DialogTitle>
-          <DialogContent>
+        {/* ──── User Management ──── */}
+        <TabPanel value={tabValue} index={1}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Typography variant="h4">User Management</Typography>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleUserDialogOpen()}
+            >
+              Add User
+            </Button>
+          </Box>
+
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Username</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell>Created At</TableCell>
+                  <TableCell align="center">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {users.map((u) => (
+                  <TableRow key={u.id} hover>
+                    <TableCell>{u.id}</TableCell>
+                    <TableCell>{u.username}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={u.role}
+                        size="small"
+                        color={u.role === 'admin' ? 'secondary' : 'default'}
+                        variant={u.role === 'admin' ? 'filled' : 'outlined'}
+                      />
+                    </TableCell>
+                    <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell align="center">
+                      <IconButton
+                        color="primary"
+                        size="small"
+                        onClick={() => handleUserDialogOpen(u)}
+                        disabled={u.id === user?.id}
+                      >
+                        <Edit />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        size="small"
+                        onClick={() => handleUserDelete(u.id, u.username)}
+                        disabled={u.id === user?.id}
+                      >
+                        <Delete />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+      </Container>
+
+      {/* ──── Room Edit/Add Dialog ──── */}
+      <Dialog
+        open={roomDialogOpen}
+        onClose={handleRoomDialogClose}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (e: React.FormEvent) => { e.preventDefault(); handleRoomSubmit(); },
+        }}
+      >
+        <DialogTitle>{editingRoom ? 'Edit Room' : 'Add New Room'}</DialogTitle>
+        <DialogContent>
+          {error && tabValue === 0 && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+              {error}
+            </Alert>
+          )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
               autoFocus
               margin="dense"
               name="name"
               label="Room Name"
-              type="text"
               fullWidth
-              variant="outlined"
-              value={formData.name}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
+              required
+              value={roomFormData.name}
+              onChange={(e) => setRoomFormData(prev => ({ ...prev, name: e.target.value }))}
             />
             <TextField
               margin="dense"
@@ -230,43 +432,124 @@ export const AdminPage: React.FC = () => {
               label="Capacity"
               type="number"
               fullWidth
-              variant="outlined"
-              value={formData.capacity}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
+              required
+              value={roomFormData.capacity}
+              onChange={(e) => setRoomFormData(prev => ({ ...prev, capacity: e.target.value }))}
             />
             <TextField
               margin="dense"
               name="location"
               label="Location"
-              type="text"
               fullWidth
-              variant="outlined"
-              value={formData.location}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
+              value={roomFormData.location}
+              onChange={(e) => setRoomFormData(prev => ({ ...prev, location: e.target.value }))}
             />
             <TextField
               margin="dense"
               name="description"
               label="Description"
-              type="text"
               fullWidth
-              variant="outlined"
               multiline
               rows={3}
-              value={formData.description}
-              onChange={handleInputChange}
+              value={roomFormData.description}
+              onChange={(e) => setRoomFormData(prev => ({ ...prev, description: e.target.value }))}
             />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleDialogClose}>Cancel</Button>
-            <Button onClick={handleSubmit} variant="contained">
-              {editingRoom ? 'Update' : 'Create'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Container>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRoomDialogClose}>Cancel</Button>
+          <Button type="submit" variant="contained">
+            {editingRoom ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ──── User Edit/Add Dialog ──── */}
+      <Dialog
+        open={userDialogOpen}
+        onClose={handleUserDialogClose}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: (e: React.FormEvent) => { e.preventDefault(); handleUserSubmit(); },
+        }}
+      >
+        <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+        <DialogContent>
+          {error && tabValue === 1 && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+              {error}
+            </Alert>
+          )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              autoFocus
+              margin="dense"
+              name="username"
+              label="Username"
+              fullWidth
+              required
+              value={userFormData.username}
+              onChange={handleUserInputChange}
+            />
+            <TextField
+              margin="dense"
+              name="email"
+              label="Email Address"
+              type="email"
+              fullWidth
+              required
+              value={userFormData.email}
+              onChange={handleUserInputChange}
+            />
+            <TextField
+              margin="dense"
+              name="password"
+              label={
+                editingUser
+                  ? userFormData.role === 'admin'
+                    ? 'New Password (required)'
+                    : 'New Password (optional)'
+                  : userFormData.role === 'admin'
+                  ? 'Password *'
+                  : 'Password'
+              }
+              type="password"
+              fullWidth
+              required={!editingUser && userFormData.role === 'admin'}
+              value={userFormData.password}
+              onChange={handleUserInputChange}
+              helperText={
+                editingUser
+                  ? 'Leave blank to keep current password'
+                  : userFormData.role === 'user'
+                  ? 'Optional — users can log in via email without a password'
+                  : 'Required for admin users'
+              }
+            />
+            <TextField
+              select
+              margin="dense"
+              name="role"
+              label="Role"
+              fullWidth
+              value={userFormData.role}
+              onChange={handleUserInputChange}
+              SelectProps={{ native: true }}
+            >
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </TextField>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleUserDialogClose}>Cancel</Button>
+          <Button type="submit" variant="contained">
+            {editingUser ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

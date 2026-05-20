@@ -1,16 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import routes
 import authRoutes from './routes/auth.js';
 import roomRoutes from './routes/rooms.js';
+import userRoutes from './routes/users.js';
 import bookingRoutes from './routes/bookings.js';
 
 // Import database
-import { initDatabase } from './database.js';
+import { initDatabase, DB_PATH } from './database.js';
 import { seedDatabase } from './utils/seedDatabase.js';
 
 // Load environment variables
@@ -29,6 +31,7 @@ app.use(express.json());
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/bookings', bookingRoutes);
 
 // Serve static files in production
@@ -66,12 +69,19 @@ app.use('*', (req, res) => {
 // Initialize database and start server
 const startServer = async () => {
   try {
+    // Seed ONLY on very first start — check before initDatabase creates the file
+    const isFreshDb = !fs.existsSync(DB_PATH);
+
     await initDatabase();
     console.log('Database initialized successfully');
-    
-    // Seed database with initial data
-    await seedDatabase();
-    
+
+    if (isFreshDb) {
+      await seedDatabase();
+      console.log('Database seeded with default admin user');
+    } else {
+      console.log('Existing database found — skipping seed');
+    }
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

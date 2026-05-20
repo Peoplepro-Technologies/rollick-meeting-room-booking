@@ -54,6 +54,21 @@ export const DashboardPage: React.FC = () => {
     setBookings(prev => prev.filter(booking => booking.id !== bookingId));
   };
 
+  const handleBookingUpdated = (updatedBooking: any) => {
+    setBookings(prev =>
+      prev.map(booking => (booking.id === updatedBooking.id ? updatedBooking : booking))
+    );
+  };
+
+  const handleBookingResized = (updatedBooking: {
+    id: number; room_id: number; user_id: number;
+    title: string; start_time: string; end_time: string; status: 'confirmed' | 'cancelled';
+  }) => {
+    setBookings(prev =>
+      prev.map(booking => (booking.id === updatedBooking.id ? updatedBooking : booking))
+    );
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -98,12 +113,16 @@ export const DashboardPage: React.FC = () => {
           onRoomSelect={setSelectedRoom}
         />
         
-<Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 3 }}>
           <Calendar
             bookings={bookings}
             roomId={selectedRoom}
             onBookingDelete={handleBookingDeleted}
             onBookingCreated={handleBookingCreated}
+            onBookingUpdate={handleBookingUpdated}
+            onBookingResized={handleBookingResized}
+            currentUserId={user?.id}
+            currentUserRole={user?.role}
           />
         </Box>
       </Container>

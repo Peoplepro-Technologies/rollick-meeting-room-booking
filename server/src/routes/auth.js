@@ -5,7 +5,7 @@ import { getDb } from '../database.js';
 
 const router = express.Router();
 
-// Login endpoint
+// Login endpoint (Admin - username/password)
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'Username and password are required'
+          message: 'Username and password are required for Admin login'
         }
       });
     }
@@ -62,7 +62,7 @@ router.post('/login', async (req, res) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role },
+      { userId: user.id, username: user.username, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -74,12 +74,86 @@ router.post('/login', async (req, res) => {
         user: {
           id: user.id,
           username: user.username,
+          email: user.email,
           role: user.role
         }
       }
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
+});
+
+// Email-only free login endpoint (for users)
+router.post('/login/email', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'Email is required'
+        }
+      });
+    }
+
+    const db = getDb();
+
+    // Find user by email
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM users WHERE email = ?',
+        [email.toLowerCase()],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(row);
+        }
+      );
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'No user found with this email'
+        }
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email, role: user.role },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Email login error:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -110,7 +184,7 @@ router.get('/me', async (req, res) => {
     const db = getDb();
     const user = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT id, username, role FROM users WHERE id = ?',
+        'SELECT id, username, email, role FROM users WHERE id = ?',
         [decoded.userId],
         (err, row) => {
           if (err) {

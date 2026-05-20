@@ -48,6 +48,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(response.data.user);
   };
 
+  const loginWithEmail = async (email: string) => {
+    const response = await apiClient.loginWithEmail(email);
+
+    if (!response.success || !response.data?.user) {
+      throw new Error(response.error?.message || 'Login failed');
+    }
+
+    setUser(response.data.user);
+  };
+
   const logout = () => {
     apiClient.clearToken();
     setUser(null);
@@ -56,6 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     user,
     login,
+    loginWithEmail,
     logout,
     isLoading,
   };

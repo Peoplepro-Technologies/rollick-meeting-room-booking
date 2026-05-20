@@ -1,6 +1,7 @@
 export interface User {
   id: number;
   username: string;
+  email: string;
   role: 'user' | 'admin';
 }
 
@@ -31,6 +32,7 @@ export interface Booking {
 export interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
+  loginWithEmail: (email: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }

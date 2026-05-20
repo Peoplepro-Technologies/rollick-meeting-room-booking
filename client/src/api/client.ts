@@ -69,6 +69,19 @@ class ApiClient {
     return response;
   }
 
+  async loginWithEmail(email: string): Promise<LoginResponse> {
+    const response = await this.request<LoginResponse>('/auth/login/email', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+
+    if (response.success && response.data?.token) {
+      this.setToken(response.data.token);
+    }
+
+    return response;
+  }
+
   async getCurrentUser(): Promise<ApiResponse<{ user: User }>> {
     return this.request('/auth/me');
   }
@@ -98,6 +111,31 @@ class ApiClient {
 
   async deleteRoom(id: number) {
     return this.request(`/rooms/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // User endpoints
+  async getUsers(): Promise<ApiResponse<{ users: any[] }>> {
+    return this.request('/users');
+  }
+
+  async createUser(userData: { username: string; email: string; password?: string; role?: string }) {
+    return this.request('/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async updateUser(id: number, userData: { username?: string; email?: string; password?: string; role?: string }) {
+    return this.request(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async deleteUser(id: number) {
+    return this.request(`/users/${id}`, {
       method: 'DELETE',
     });
   }
@@ -132,8 +170,8 @@ class ApiClient {
     });
   }
 
-  async updateBooking(id: number, bookingData: any) {
-    return this.request(`/bookings/${id}`, {
+  async updateBooking(id: number, bookingData: { title?: string; start_time?: string; end_time?: string }) {
+    return this.request<ApiResponse<{ booking: any }>>(`/bookings/${id}`, {
       method: 'PUT',
       body: JSON.stringify(bookingData),
     });

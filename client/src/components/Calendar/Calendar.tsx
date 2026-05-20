@@ -6,7 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { DateSelectArg, EventClickArg, EventChangeArg } from '@fullcalendar/core';
 import { apiClient } from '../../api/client';
 import { ApiResponse } from '../../types';
-import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Box, Typography, MenuItem } from '@mui/material';
+import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Box, Typography, MenuItem, Tooltip } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -53,20 +53,20 @@ export const Calendar: React.FC<CalendarProps> = ({
   onRoomSelect,
 }) => {
   const [events, setEvents] = useState<any[]>([]);
-  const [userColors, setUserColors] = useState<Map<number, string>>(new Map());
+  const [roomColors, setRoomColors] = useState<Map<number, string>>(new Map());
   const [selectedInfo, setSelectedInfo] = useState<DateSelectArg | null>(null);
 
   useEffect(() => {
     const colorMap = new Map<number, string>();
-    const allUserIds = new Set<number>();
-    bookings.forEach(b => allUserIds.add(b.user_id));
-    
+    const allRoomIds = new Set<number>();
+    bookings.forEach(b => allRoomIds.add(b.room_id));
+
     let hue = 0;
-    allUserIds.forEach(userId => {
-      colorMap.set(userId, `hsl(${hue}, 70%, 50%)`);
+    allRoomIds.forEach(roomId => {
+      colorMap.set(roomId, `hsl(${hue}, 70%, 50%)`);
       hue += 60;
     });
-    setUserColors(colorMap);
+    setRoomColors(colorMap);
   }, [bookings]);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       : bookings;
 
     const calendarEvents = filteredBookings.map(booking => {
-      const bgColor = userColors.get(booking.user_id) || '#1976d2';
+      const bgColor = roomColors.get(booking.room_id) || '#1976d2';
       return {
         id: booking.id.toString(),
         title: booking.title,
@@ -90,7 +90,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     });
 
     setEvents(calendarEvents);
-  }, [bookings, roomId, userColors]);
+   }, [bookings, roomId, roomColors]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -470,19 +470,45 @@ export const Calendar: React.FC<CalendarProps> = ({
 selectMirror={true}
           dayMaxEvents={true}
           events={events}
+          dayHeaderFormat={{ weekday: 'short', day: 'numeric', month: 'numeric' }}
+          slotLabelFormat={{ hour: 'numeric', minute: '2-digit', hour12: false }}
           eventContent={(arg) => {
             const booking = arg.event.extendedProps.booking;
-            const bgColor = booking ? userColors.get(booking.user_id) || '#1976d2' : '#1976d2';
+            const bgColor = booking ? roomColors.get(booking.room_id) || '#1976d2' : '#1976d2';
             const username = booking?.username || 'Unknown';
+            const roomName = booking?.room_name || 'Unknown Room';
             return (
-              <Box sx={{ backgroundColor: bgColor, width: '100%', height: '100%', p: 0.5 }}>
-                <Typography variant="caption" component="div" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
-                  {arg.event.title}
-                </Typography>
-                <Typography variant="caption" component="div" sx={{ fontSize: '0.65rem', opacity: 0.9, lineHeight: 1.2 }}>
-                  By: {username}
-                </Typography>
-              </Box>
+              <Tooltip
+                title={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Room: {roomName}</Typography>
+                    <Typography variant="body2">Booked By: {username}</Typography>
+                  </Box>
+                }
+                arrow
+                enterDelay={300}
+                enterNextDelay={300}
+                placement="top"
+                slotProps={{
+                  popper: {
+                    modifiers: [
+                      {
+                        name: 'offset',
+                        options: { offset: [0, -8] },
+                      },
+                    ],
+                  },
+                }}
+              >
+                <Box sx={{ backgroundColor: bgColor, width: '100%', height: '100%', p: 0.5, cursor: 'default' }}>
+                  <Typography variant="caption" component="div" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
+                    {arg.event.title}
+                  </Typography>
+                  <Typography variant="caption" component="div" sx={{ fontSize: '0.65rem', opacity: 0.9, lineHeight: 1.2 }}>
+                    By: {username}
+                  </Typography>
+                </Box>
+              </Tooltip>
             );
           }}
           eventClick={handleEventClick}

@@ -123,6 +123,8 @@ export const DashboardPage: React.FC = () => {
             onBookingResized={handleBookingResized}
             currentUserId={user?.id}
             currentUserRole={user?.role}
+            rooms={rooms}
+            onRoomSelect={setSelectedRoom}
           />
         </Box>
       </Container>

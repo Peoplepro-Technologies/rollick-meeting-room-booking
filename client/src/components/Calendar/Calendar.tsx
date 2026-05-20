@@ -6,7 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { DateSelectArg, EventClickArg, EventChangeArg } from '@fullcalendar/core';
 import { apiClient } from '../../api/client';
 import { ApiResponse } from '../../types';
-import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Box, Typography } from '@mui/material';
+import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Box, Typography, MenuItem } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -33,6 +33,8 @@ interface CalendarProps {
   onBookingResized?: (updatedBooking: { id: number; room_id: number; user_id: number; title: string; start_time: string; end_time: string; status: 'confirmed' | 'cancelled' }) => void;
   currentUserId?: number;
   currentUserRole?: 'user' | 'admin';
+  rooms?: Array<{ id: number; name: string; capacity: number; location?: string; description?: string }>;
+  onRoomSelect?: (roomId: number) => void;
 }
 
 const WORKING_HOUR_START = 9;
@@ -47,6 +49,8 @@ export const Calendar: React.FC<CalendarProps> = ({
   onBookingResized,
   currentUserId,
   currentUserRole,
+  rooms,
+  onRoomSelect,
 }) => {
   const [events, setEvents] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,6 +74,8 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roomDialogOpen, setRoomDialogOpen] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
 
   useEffect(() => {
     const filteredBookings = roomId
@@ -238,7 +244,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const handleSubmit = async () => {
     if (!roomId) {
-      setError('Please select a room first');
+      setRoomDialogOpen(true);
       return;
     }
     
@@ -388,6 +394,18 @@ export const Calendar: React.FC<CalendarProps> = ({
       resizeInfo.revert();
       setError(e instanceof Error ? e.message : 'Failed to save booking. Please try again.');
     }
+  };
+
+  const handleRoomSelect = (roomId: number) => {
+    setSelectedRoomId(roomId);
+  };
+
+  const handleRoomConfirm = () => {
+    if (selectedRoomId && onRoomSelect) {
+      onRoomSelect(selectedRoomId);
+    }
+    setRoomDialogOpen(false);
+    setSelectedRoomId(null);
   };
 
   return (
@@ -580,6 +598,43 @@ export const Calendar: React.FC<CalendarProps> = ({
               {editLoading ? <CircularProgress size={24} /> : 'Save'}
             </Button>
           </Box>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={roomDialogOpen} onClose={() => setRoomDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Select a Room</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Please select a room to create a booking.
+            </Typography>
+            <TextField
+              select
+              label="Room"
+              value={selectedRoomId || ''}
+              onChange={(e) => handleRoomSelect(Number(e.target.value))}
+              fullWidth
+              required
+            >
+              {rooms && rooms.map((room) => (
+                <MenuItem key={room.id} value={room.id}>
+                  {room.name} (Capacity: {room.capacity})
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRoomDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRoomConfirm}
+            disabled={!selectedRoomId}
+          >
+            Select Room
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

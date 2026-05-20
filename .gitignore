@@ -2,3 +2,4 @@
 .env
 start-dev.sh
 node_modules/
+database.sqlite

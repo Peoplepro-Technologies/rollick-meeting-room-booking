@@ -53,8 +53,46 @@ export const Calendar: React.FC<CalendarProps> = ({
   onRoomSelect,
 }) => {
   const [events, setEvents] = useState<any[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [userColors, setUserColors] = useState<Map<number, string>>(new Map());
   const [selectedInfo, setSelectedInfo] = useState<DateSelectArg | null>(null);
+
+  useEffect(() => {
+    const colorMap = new Map<number, string>();
+    const allUserIds = new Set<number>();
+    bookings.forEach(b => allUserIds.add(b.user_id));
+    
+    let hue = 0;
+    allUserIds.forEach(userId => {
+      colorMap.set(userId, `hsl(${hue}, 70%, 50%)`);
+      hue += 60;
+    });
+    setUserColors(colorMap);
+  }, [bookings]);
+
+  useEffect(() => {
+    const filteredBookings = roomId
+      ? bookings.filter(booking => booking.room_id === roomId)
+      : bookings;
+
+    const calendarEvents = filteredBookings.map(booking => {
+      const bgColor = userColors.get(booking.user_id) || '#1976d2';
+      return {
+        id: booking.id.toString(),
+        title: booking.title,
+        start: booking.start_time,
+        end: booking.end_time,
+        backgroundColor: bgColor,
+        borderColor: bgColor,
+        extendedProps: {
+          booking,
+        },
+      };
+    });
+
+    setEvents(calendarEvents);
+  }, [bookings, roomId, userColors]);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     start: new Date(),
@@ -76,30 +114,6 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [roomDialogOpen, setRoomDialogOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-
-  useEffect(() => {
-    const filteredBookings = roomId
-      ? bookings.filter(booking => booking.room_id === roomId)
-      : bookings;
-
-    const calendarEvents = filteredBookings.map(booking => {
-      const hue = (booking.room_id * 60) % 360;
-      const bgColor = `hsl(${hue}, 70%, 50%)`;
-      return {
-        id: booking.id.toString(),
-        title: booking.title,
-        start: booking.start_time,
-        end: booking.end_time,
-        backgroundColor: bgColor,
-        borderColor: bgColor,
-        extendedProps: {
-          booking,
-        },
-      };
-    });
-
-    setEvents(calendarEvents);
-  }, [bookings, roomId]);
 
   const constrainToWorkingHours = useCallback((date: Date): Date => {
     const constrainedDate = new Date(date);
@@ -453,16 +467,21 @@ export const Calendar: React.FC<CalendarProps> = ({
           initialView="timeGridWeek"
           editable={true}
           selectable={true}
-          selectMirror={true}
+selectMirror={true}
           dayMaxEvents={true}
           events={events}
           eventContent={(arg) => {
-            const bgColor = arg.event.extendedProps.booking?.room_id
-              ? `hsl(${(arg.event.extendedProps.booking.room_id * 60) % 360}, 70%, 50%)`
-              : '#1976d2';
+            const booking = arg.event.extendedProps.booking;
+            const bgColor = booking ? userColors.get(booking.user_id) || '#1976d2' : '#1976d2';
+            const username = booking?.username || 'Unknown';
             return (
-              <Box sx={{ backgroundColor: bgColor, width: '100%', height: '100%' }}>
-                <span>{arg.event.title}</span>
+              <Box sx={{ backgroundColor: bgColor, width: '100%', height: '100%', p: 0.5 }}>
+                <Typography variant="caption" component="div" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
+                  {arg.event.title}
+                </Typography>
+                <Typography variant="caption" component="div" sx={{ fontSize: '0.65rem', opacity: 0.9, lineHeight: 1.2 }}>
+                  By: {username}
+                </Typography>
               </Box>
             );
           }}

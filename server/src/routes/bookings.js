@@ -264,17 +264,25 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
     
-    // Create booking
+// Create booking
     const result = await new Promise((resolve, reject) => {
       db.run(
         'INSERT INTO bookings (room_id, user_id, title, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
         [room_id, user_id, title, start_time, end_time],
-        function(err) {
+        async function(err) {
           if (err) {
             reject(err);
             return;
           }
-          resolve({ id: this.lastID });
+          
+          const user = await new Promise((resolve, reject) => {
+            db.get('SELECT username FROM users WHERE id = ?', [user_id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          
+          resolve({ id: this.lastID, username: user?.username });
         }
       );
     });
@@ -289,7 +297,8 @@ router.post('/', authenticateToken, async (req, res) => {
           title,
           start_time,
           end_time,
-          status: 'confirmed'
+          status: 'confirmed',
+          username: result.username
         }
       }
     });
@@ -393,6 +402,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       );
     });
     
+    // Get username
+    const user = await new Promise((resolve, reject) => {
+      db.get('SELECT username FROM users WHERE id = ?', [booking.user_id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
     res.json({
       success: true,
       data: {
@@ -403,7 +420,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           title: title || booking.title,
           start_time: start_time || booking.start_time,
           end_time: end_time || booking.end_time,
-          status: booking.status
+          status: booking.status,
+          username: user?.username
         }
       }
     });

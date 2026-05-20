@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import roomRoutes from './routes/rooms.js';
 import userRoutes from './routes/users.js';
 import bookingRoutes from './routes/bookings.js';
+import themeRoutes from './routes/theme.js';
 
 // Import database
 import { initDatabase, DB_PATH } from './database.js';
@@ -33,6 +34,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/theme', themeRoutes);
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {

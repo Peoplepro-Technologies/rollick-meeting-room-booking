@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Typography,
@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { RoomTabs } from '../components/RoomTabs/RoomTabs';
 import { Calendar } from '../components/Calendar/Calendar';
 import { apiClient } from '../api/client';
+import { useTheme } from '../hooks/useTheme';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -20,6 +21,28 @@ export const DashboardPage: React.FC = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { palette, textColor } = useTheme();
+
+  const roomColors = useMemo(() => {
+    const colorMap = new Map<number, string>();
+    let idx = 0;
+    const seen = new Set<number>();
+    bookings.forEach(b => {
+      if (!seen.has(b.room_id)) {
+        seen.add(b.room_id);
+        colorMap.set(b.room_id, palette[idx % palette.length]);
+        idx++;
+      }
+    });
+    rooms.forEach(r => {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        colorMap.set(r.id, palette[idx % palette.length]);
+        idx++;
+      }
+    });
+    return colorMap;
+  }, [bookings, rooms, palette]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,6 +134,8 @@ export const DashboardPage: React.FC = () => {
           rooms={rooms}
           selectedRoom={selectedRoom}
           onRoomSelect={setSelectedRoom}
+          roomColors={roomColors}
+          textColor={textColor}
         />
         
         <Box sx={{ mt: 3 }}>
@@ -125,6 +150,8 @@ export const DashboardPage: React.FC = () => {
             currentUserRole={user?.role}
             rooms={rooms}
             onRoomSelect={setSelectedRoom}
+            roomColors={roomColors}
+            textColor={textColor}
           />
         </Box>
       </Container>

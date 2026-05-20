@@ -182,6 +182,18 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // Theme endpoints
+  async getTheme(): Promise<ApiResponse<{ palette_index: number; text_color_index: number }>> {
+    return this.request('/theme');
+  }
+
+  async updateTheme(paletteIndex: number, textColorIndex: number): Promise<ApiResponse<{ palette_index: number; text_color_index: number }>> {
+    return this.request('/theme', {
+      method: 'POST',
+      body: JSON.stringify({ palette_index: paletteIndex, text_color_index: textColorIndex }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

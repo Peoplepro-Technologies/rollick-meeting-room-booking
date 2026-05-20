@@ -67,6 +67,18 @@ export const initDatabase = () => {
             reject(err);
             return;
           }
+
+          // Theme settings table
+          db.run(`
+            CREATE TABLE IF NOT EXISTS theme_settings (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              palette_index INTEGER NOT NULL DEFAULT 0,
+              text_color_index INTEGER NOT NULL DEFAULT 0,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+          `);
+
           resolve();
         });
       });

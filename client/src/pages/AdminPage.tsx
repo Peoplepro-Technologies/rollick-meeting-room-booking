@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -23,7 +23,11 @@ import {
   Tab,
   Chip,
   Alert,
+  FormLabel,
+  Snackbar,
+  CircularProgress,
 } from '@mui/material';
+import SaveIcon from '@mui/icons-material/Save';
 import { Add, Edit, Delete, ArrowBack } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -83,10 +87,40 @@ export const AdminPage: React.FC = () => {
     role: 'user',
   });
   const [error, setError] = useState('');
+  const [themeLoading, setThemeLoading] = useState(false);
+  const [themeSaved, setThemeSaved] = useState(false);
+  const [paletteIndex, setPaletteIndex] = useState(0);
+  const [textColorIndex, setTextColorIndex] = useState(0);
+
+  const PALETTES = [
+    { colors: ['#ABDEE6', '#CBAACB', '#FFFFB5', '#FFCCB6', '#F3B0C3'] },
+    { colors: ['#C6DBDA', '#FEE1E8', '#FED7C3', '#F6EAC2', '#ECD5E3'] },
+    { colors: ['#FF968A', '#FFAEA5', '#FFC5BF', '#FFD8BE', '#FFC8A2'] },
+    { colors: ['#D4F0F0', '#8FCACA', '#CCE2CB', '#B6CFB6', '#97C1A9'] },
+    { colors: ['#FCB9AA', '#FFDBCC', '#ECEAE4', '#A2E1DB', '#55CBCD'] },
+  ];
+
+  const TEXT_COLORS = ['#2B2B2B', '#4A4A4A', '#5C3D4D'];
 
   useEffect(() => {
     fetchData();
+   }, []);
+
+  const fetchTheme = useCallback(async () => {
+    try {
+      const res = await apiClient.getTheme();
+      if (res.success && res.data) {
+        setPaletteIndex(res.data.palette_index);
+        setTextColorIndex(res.data.text_color_index);
+      }
+    } catch (err) {
+      console.error('Failed to fetch theme:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchTheme();
+  }, [fetchTheme]);
 
   const fetchData = async () => {
     try {
@@ -242,6 +276,19 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const handleThemeSave = async () => {
+    setThemeLoading(true);
+    try {
+      await apiClient.updateTheme(paletteIndex, textColorIndex);
+      setThemeSaved(true);
+      setTimeout(() => setThemeSaved(false), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save theme');
+    } finally {
+      setThemeLoading(false);
+    }
+  };
+
   // ---------- Render ----------
   if (loading) {
     return (
@@ -283,6 +330,7 @@ export const AdminPage: React.FC = () => {
         >
           <Tab label="Room Management" />
           <Tab label={`User Management (${users.length})`} />
+          <Tab label="Theme Settings" />
         </Tabs>
 
         {/* ──── Room Management ──── */}
@@ -395,7 +443,132 @@ export const AdminPage: React.FC = () => {
             </Table>
           </TableContainer>
         </TabPanel>
+
+        {/* ──── Theme Settings ──── */}
+        <TabPanel value={tabValue} index={2}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 4,
+              py: 2,
+            }}
+          >
+            {/* Palette selector */}
+            <Box>
+              <FormLabel sx={{ mb: 1.5, display: 'block', fontWeight: 600 }}>
+                Color Palette
+              </FormLabel>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {PALETTES.map((palette, idx) => (
+                  <Box
+                    key={idx}
+                    onClick={() => setPaletteIndex(idx)}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      p: 1.5,
+                      borderRadius: 2,
+                      border: paletteIndex === idx ? '2px solid #1976d2' : '2px solid transparent',
+                      bgcolor: paletteIndex === idx ? 'rgba(25,118,210,0.06)' : 'transparent',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: '#90caf9',
+                        bgcolor: 'rgba(25,118,210,0.04)',
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+                      {palette.colors.map((c, ci) => (
+                        <Box
+                          key={ci}
+                          sx={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            backgroundColor: c,
+                            border: '1px solid rgba(0,0,0,0.1)',
+                          }}
+                        />
+                      ))}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Palette {idx + 1}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            {/* Text color selector */}
+            <Box>
+              <FormLabel sx={{ mb: 1.5, display: 'block', fontWeight: 600 }}>
+                Text Color
+              </FormLabel>
+              <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {TEXT_COLORS.map((color, idx) => (
+                  <Box
+                    key={idx}
+                    onClick={() => setTextColorIndex(idx)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      cursor: 'pointer',
+                      p: 1,
+                      borderRadius: 2,
+                      border: textColorIndex === idx ? '2px solid #1976d2' : '2px solid transparent',
+                      bgcolor: textColorIndex === idx ? 'rgba(25,118,210,0.06)' : 'transparent',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: '#90caf9',
+                        bgcolor: 'rgba(25,118,210,0.04)',
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        backgroundColor: color,
+                        border: '2px solid rgba(0,0,0,0.15)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Typography variant="body2" sx={{ color }}>
+                      Aa
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            {/* Save button */}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleThemeSave}
+              disabled={themeLoading}
+              sx={{ mt: 1 }}
+            >
+              {themeLoading ? <CircularProgress size={20} color="inherit" /> : 'Save Theme'}
+            </Button>
+          </Box>
+        </TabPanel>
       </Container>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={themeSaved}
+        autoHideDuration={3000}
+        onClose={() => setThemeSaved(false)}
+        message="Theme settings saved successfully!"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
 
       {/* ──── Room Edit/Add Dialog ──── */}
       <Dialog

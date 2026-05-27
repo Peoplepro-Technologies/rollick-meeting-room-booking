@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: meeting-room-booking
+    region: oregon
+    plan: free
+    env: node
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    rootDir: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true

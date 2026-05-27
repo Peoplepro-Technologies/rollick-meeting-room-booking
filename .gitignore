@@ -1,5 +1,18 @@
-.env.example
+# Environment variables
 .env
+.env.local
+.env.development
+.env.production
+
+# Development scripts
 start-dev.sh
+
+# Dependencies
 node_modules/
+
+# Database
 database.sqlite
+
+# Build outputs
+client/dist/
+server/dist/

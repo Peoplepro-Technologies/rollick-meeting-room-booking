@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getDb } from '../database.js';
+import db from '../lib/db.js';
 
 const router = express.Router();
 
@@ -51,18 +51,15 @@ const requireAdmin = (req, res, next) => {
 // Get all users
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
-    const users = await new Promise((resolve, reject) => {
-      db.all(
-        'SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC',
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(rows);
-        }
-      );
+    const users = await db.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true
+      }
     });
 
     res.json({
@@ -119,37 +116,33 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    const db = getDb();
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
     try {
-      const result = await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
-          [username, email.toLowerCase(), passwordHash, role || 'user'],
-          function(err) {
-            if (err) {
-              reject(err);
-              return;
-            }
-            resolve({ id: this.lastID });
-          }
-        );
-      });
-
-      res.status(201).json({
-        success: true,
+      const user = await db.user.create({
         data: {
-          user: {
-            id: result.id,
-            username,
-            email: email.toLowerCase(),
-            role: role || 'user'
-          }
+          username,
+          email: email.toLowerCase(),
+          passwordHash,
+          role: role || 'user'
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          createdAt: true
         }
       });
-    } catch (err) {
-      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+
+      res.json({
+        success: true,
+        data: {
+          user
+        }
+      });
+    } catch (error) {
+      if (error.code === 'P2002') {
         return res.status(409).json({
           success: false,
           error: {
@@ -158,7 +151,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
           }
         });
       }
-      throw err;
+      throw error;
     }
   } catch (error) {
     console.error('Create user error:', error);
@@ -189,13 +182,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    const db = getDb();
-
-    const existingUser = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-        if (err) { reject(err); return; }
-        resolve(row);
-      });
+    const existingUser = await db.user.findUnique({
+      where: { id: parseInt(id) }
     });
 
     if (!existingUser) {
@@ -208,14 +196,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    const fields = [];
-    const params = [];
-
-    if (username !== undefined) {
-      fields.push('username = ?');
-      params.push(username);
-    }
-
+    const updateData = {};
+    if (username !== undefined) updateData.username = username;
     if (email !== undefined) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return res.status(400).json({
@@ -226,63 +208,40 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
           }
         });
       }
-      fields.push('email = ?');
-      params.push(email.toLowerCase());
+      updateData.email = email.toLowerCase();
     }
-
-    if (password) {
-      fields.push('password_hash = ?');
-      params.push(await bcrypt.hash(password, 10));
+    if (password !== undefined) {
+      updateData.passwordHash = await bcrypt.hash(password, 10);
     }
+    if (role !== undefined) updateData.role = role;
 
-    if (role !== undefined) {
-      fields.push('role = ?');
-      params.push(role);
-    }
-
-    fields.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    try {
-      await new Promise((resolve, reject) => {
-        db.run(
-          `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
-          params,
-          function(err) {
-            if (err) {
-              reject(err);
-              return;
-            }
-            resolve({ changes: this.changes });
-          }
-        );
-      });
-
-      const updatedUser = await new Promise((resolve, reject) => {
-        db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id], (err, row) => {
-          if (err) { reject(err); return; }
-          resolve(row);
-        });
-      });
-
-      res.json({
-        success: true,
-        data: { user: updatedUser }
-      });
-    } catch (err) {
-      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return res.status(409).json({
-          success: false,
-          error: {
-            code: 'DUPLICATE_USER',
-            message: 'Username or email already exists'
-          }
-        });
+    const updatedUser = await db.user.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true
       }
-      throw err;
-    }
+    });
+
+    res.json({
+      success: true,
+      data: { user: updatedUser }
+    });
   } catch (error) {
     console.error('Update user error:', error);
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'DUPLICATE_USER',
+          message: 'Username or email already exists'
+        }
+      });
+    }
     res.status(500).json({
       success: false,
       error: {
@@ -309,43 +268,21 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    const db = getDb();
-
-    const user = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-        if (err) { reject(err); return; }
-        resolve(row);
-      });
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: 'User not found'
-        }
-      });
-    }
-
-    await new Promise((resolve, reject) => {
-      db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
-        if (err) { reject(err); return; }
-        resolve({ changes: this.changes });
-      });
-    });
-
-    // Also delete user's bookings
-    await new Promise((resolve, reject) => {
-      db.run('DELETE FROM bookings WHERE user_id = ?', [id], function(err) {
-        if (err) reject(err);
-        else resolve(null);
-      });
+    const deletedUser = await db.user.delete({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        username: true,
+        email: true
+      }
     });
 
     res.json({
       success: true,
-      message: 'User deleted successfully'
+      message: 'User deleted successfully',
+      data: {
+        user: deletedUser
+      }
     });
   } catch (error) {
     console.error('Delete user error:', error);

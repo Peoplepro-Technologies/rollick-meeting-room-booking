@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getDb } from '../database.js';
+import db from '../lib/db.js';
 
 const router = express.Router();
 
@@ -20,23 +20,11 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    const db = getDb();
-    
     // Find user
-    const user = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM users WHERE username = ?',
-        [username],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+    const user = await db.user.findUnique({
+      where: { username }
     });
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -46,10 +34,10 @@ router.post('/login', async (req, res) => {
         }
       });
     }
-    
+
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -59,14 +47,14 @@ router.post('/login', async (req, res) => {
         }
       });
     }
-    
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, username: user.username, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
-    
+
     res.json({
       success: true,
       data: {
@@ -106,34 +94,41 @@ router.post('/login/email', async (req, res) => {
       });
     }
 
-    const db = getDb();
-
     // Find user by email
-    const user = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM users WHERE email = ?',
-        [email.toLowerCase()],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+    const user = await db.user.findUnique({
+      where: { email: email.toLowerCase() }
     });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: 'No user found with this email'
+      // Create new user if not exists
+      const newUser = await db.user.create({
+        data: {
+          username: email.split('@')[0],
+          email: email.toLowerCase(),
+          role: 'user'
+        }
+      });
+
+      const token = jwt.sign(
+        { userId: newUser.id, username: newUser.username, email: newUser.email, role: newUser.role },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          token,
+          user: {
+            id: newUser.id,
+            username: newUser.username,
+            email: newUser.email,
+            role: newUser.role
+          }
         }
       });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, username: user.username, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -181,19 +176,14 @@ router.get('/me', async (req, res) => {
     
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     
-    const db = getDb();
-    const user = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT id, username, email, role FROM users WHERE id = ?',
-        [decoded.userId],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+    const user = await db.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true
+      }
     });
     
     if (!user) {

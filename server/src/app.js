@@ -13,8 +13,8 @@ import bookingRoutes from './routes/bookings.js';
 import themeRoutes from './routes/theme.js';
 
 // Import database
-import { initDatabase, DB_PATH } from './database.js';
-import { seedDatabase } from './utils/seedDatabase.js';
+import db from './lib/db.js';
+import { seedDatabase } from '../prisma/seed.js';
 
 // Load environment variables
 dotenv.config();
@@ -91,17 +91,20 @@ app.use('*', (req, res) => {
 // Initialize database and start server
 const startServer = async () => {
   try {
-    // Seed ONLY on very first start — check before initDatabase creates the file
-    const isFreshDb = !fs.existsSync(DB_PATH);
+    // Test database connection
+    await db.$connect();
+    console.log('Database connected successfully');
 
-    await initDatabase();
-    console.log('Database initialized successfully');
+    // Check if database has been seeded before
+    const adminUser = await db.user.findUnique({
+      where: { email: 'admin@meetingroom.com' }
+    });
 
-    if (isFreshDb) {
+    if (!adminUser) {
       await seedDatabase();
       console.log('Database seeded with default admin user');
     } else {
-      console.log('Existing database found — skipping seed');
+      console.log('Database already seeded');
     }
 
     app.listen(PORT, '0.0.0.0', () => {

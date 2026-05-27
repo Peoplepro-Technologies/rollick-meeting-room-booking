@@ -1,98 +1,123 @@
 import express from 'express';
-import { getDb } from '../database.js';
+import jwt from 'jsonwebtoken';
+import db from '../lib/db.js';
 
 const router = express.Router();
 
-// Get current theme settings
-router.get('/', async (req, res) => {
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'NO_TOKEN',
+        message: 'No token provided'
+      }
+    });
+  }
+
   try {
-    const db = getDb();
-    const settings = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM theme_settings WHERE id = 1',
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_TOKEN',
+        message: 'Invalid token'
+      }
+    });
+  }
+};
+
+// Get theme settings
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const theme = await db.themeSetting.findUnique({
+      where: { id: 1 }
     });
 
-    if (!settings) {
+    // If no theme settings exist, create default
+    if (!theme) {
+      const defaultTheme = await db.themeSetting.create({
+        data: {
+          id: 1,
+          paletteIndex: 0,
+          textColorIndex: 0
+        }
+      });
+
       return res.json({
         success: true,
         data: {
-          palette_index: 0,
-          text_color_index: 0,
-        },
+          theme: defaultTheme
+        }
       });
     }
 
     res.json({
       success: true,
       data: {
-        palette_index: settings.palette_index,
-        text_color_index: settings.text_color_index,
-      },
+        theme
+      }
     });
   } catch (error) {
-    console.error('Get theme error:', error);
+    console.error('Get theme settings error:', error);
     res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Internal server error',
-      },
+        message: 'Internal server error'
+      }
     });
   }
 });
 
-// Update theme settings (admin only)
-router.post('/', async (req, res) => {
+// Update theme settings
+router.put('/', authenticateToken, async (req, res) => {
   try {
-    const { palette_index, text_color_index } = req.body;
+    const { paletteIndex, textColorIndex } = req.body;
 
-    if (palette_index === undefined || text_color_index === undefined) {
+    if (paletteIndex === undefined || textColorIndex === undefined) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'palette_index and text_color_index are required',
-        },
+          message: 'Palette index and text color index are required'
+        }
       });
     }
 
-    const db = getDb();
-    await new Promise((resolve, reject) => {
-      db.run(
-        `INSERT INTO theme_settings (id, palette_index, text_color_index, updated_at)
-         VALUES (1, ?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(id) DO UPDATE SET
-           palette_index = excluded.palette_index,
-           text_color_index = excluded.text_color_index,
-           updated_at = excluded.updated_at`,
-        [palette_index, text_color_index],
-        function (err) {
-          if (err) reject(err);
-          else resolve({ changes: this.changes });
-        }
-      );
+    const theme = await db.themeSetting.upsert({
+      where: { id: 1 },
+      update: {
+        paletteIndex,
+        textColorIndex
+      },
+      create: {
+        id: 1,
+        paletteIndex,
+        textColorIndex
+      }
     });
 
     res.json({
       success: true,
       data: {
-        palette_index,
-        text_color_index,
-      },
+        theme
+      }
     });
   } catch (error) {
-    console.error('Update theme error:', error);
+    console.error('Update theme settings error:', error);
     res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Internal server error',
-      },
+        message: 'Internal server error'
+      }
     });
   }
 });

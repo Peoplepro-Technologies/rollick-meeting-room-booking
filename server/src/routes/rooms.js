@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { getDb } from '../database.js';
+import db from '../lib/db.js';
 
 const router = express.Router();
 
@@ -50,20 +50,10 @@ const requireAdmin = (req, res, next) => {
 // Get all rooms
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    const rooms = await new Promise((resolve, reject) => {
-      db.all(
-        'SELECT * FROM rooms ORDER BY name',
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(rows);
-        }
-      );
+    const rooms = await db.room.findMany({
+      orderBy: { name: 'asc' }
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -86,22 +76,11 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const db = getDb();
-    const room = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM rooms WHERE id = ?',
-        [id],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+
+    const room = await db.room.findUnique({
+      where: { id: parseInt(id) }
     });
-    
+
     if (!room) {
       return res.status(404).json({
         success: false,
@@ -111,7 +90,7 @@ router.get('/:id', async (req, res) => {
         }
       });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -134,7 +113,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, capacity, location, description } = req.body;
-    
+
     if (!name || !capacity) {
       return res.status(400).json({
         success: false,
@@ -144,32 +123,20 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         }
       });
     }
-    
-    const db = getDb();
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO rooms (name, capacity, location, description) VALUES (?, ?, ?, ?)',
-        [name, capacity, location || null, description || null],
-        function(err) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve({ id: this.lastID });
-        }
-      );
+
+    const room = await db.room.create({
+      data: {
+        name,
+        capacity: parseInt(capacity),
+        location,
+        description
+      }
     });
-    
-    res.status(201).json({
+
+    res.json({
       success: true,
       data: {
-        room: {
-          id: result.id,
-          name,
-          capacity,
-          location,
-          description
-        }
+        room
       }
     });
   } catch (error) {
@@ -189,7 +156,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, capacity, location, description } = req.body;
-    
+
     if (!name || !capacity) {
       return res.status(400).json({
         success: false,
@@ -199,23 +166,18 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         }
       });
     }
-    
-    const db = getDb();
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'UPDATE rooms SET name = ?, capacity = ?, location = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [name, capacity, location || null, description || null, id],
-        function(err) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve({ changes: this.changes });
-        }
-      );
+
+    const room = await db.room.update({
+      where: { id: parseInt(id) },
+      data: {
+        name,
+        capacity: parseInt(capacity),
+        location,
+        description
+      }
     });
-    
-    if (result.changes === 0) {
+
+    if (!room) {
       return res.status(404).json({
         success: false,
         error: {
@@ -224,17 +186,11 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         }
       });
     }
-    
+
     res.json({
       success: true,
       data: {
-        room: {
-          id: parseInt(id),
-          name,
-          capacity,
-          location,
-          description
-        }
+        room
       }
     });
   } catch (error) {
@@ -253,23 +209,12 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const db = getDb();
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'DELETE FROM rooms WHERE id = ?',
-        [id],
-        function(err) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve({ changes: this.changes });
-        }
-      );
+
+    const deletedRoom = await db.room.delete({
+      where: { id: parseInt(id) }
     });
-    
-    if (result.changes === 0) {
+
+    if (!deletedRoom) {
       return res.status(404).json({
         success: false,
         error: {
@@ -278,7 +223,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
         }
       });
     }
-    
+
     res.json({
       success: true,
       message: 'Room deleted successfully'

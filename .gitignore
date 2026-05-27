@@ -3,16 +3,23 @@
 .env.local
 .env.development
 .env.production
+.env.example
 
 # Development scripts
 start-dev.sh
+*.sh
 
 # Dependencies
 node_modules/
 
-# Database
+# Database files
 database.sqlite
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
 
 # Build outputs
 client/dist/
 server/dist/
+*.log

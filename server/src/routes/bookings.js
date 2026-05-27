@@ -1,13 +1,13 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { getDb } from '../database.js';
+import db from '../lib/db.js';
 
 const router = express.Router();
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -37,39 +37,33 @@ const authenticateToken = (req, res, next) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { room_id, start_date, end_date } = req.query;
-    
-    let query = `
-      SELECT b.*, u.username, r.name as room_name 
-      FROM bookings b 
-      JOIN users u ON b.user_id = u.id 
-      JOIN rooms r ON b.room_id = r.id
-    `;
-    const params = [];
-    
-    if (room_id) {
-      query += ' WHERE b.room_id = ?';
-      params.push(room_id);
-    }
-    
+
+    const whereClause = {};
+    if (room_id) whereClause.roomId = parseInt(room_id);
     if (start_date && end_date) {
-      query += room_id ? ' AND' : ' WHERE';
-      query += ' b.start_time >= ? AND b.end_time <= ?';
-      params.push(start_date, end_date);
+      whereClause.startTime = {
+        gte: new Date(start_date),
+        lte: new Date(end_date)
+      };
     }
-    
-    query += ' ORDER BY b.start_time';
-    
-    const db = getDb();
-    const bookings = await new Promise((resolve, reject) => {
-      db.all(query, params, (err, rows) => {
-        if (err) {
-          reject(err);
-          return;
+
+    const bookings = await db.booking.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            username: true
+          }
+        },
+        room: {
+          select: {
+            name: true
+          }
         }
-        resolve(rows);
-      });
+      },
+      orderBy: { startTime: 'asc' }
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -92,26 +86,23 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const db = getDb();
-    const booking = await new Promise((resolve, reject) => {
-      db.get(
-        `SELECT b.*, u.username, r.name as room_name 
-         FROM bookings b 
-         JOIN users u ON b.user_id = u.id 
-         JOIN rooms r ON b.room_id = r.id 
-         WHERE b.id = ?`,
-        [id],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
+
+    const booking = await db.booking.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        user: {
+          select: {
+            username: true
           }
-          resolve(row);
+        },
+        room: {
+          select: {
+            name: true
+          }
         }
-      );
+      }
     });
-    
+
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -121,7 +112,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         }
       });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -140,92 +131,52 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Check availability
-router.get('/availability/check', async (req, res) => {
-  try {
-    const { room_id, start_time, end_time } = req.query;
-    
-    if (!room_id || !start_time || !end_time) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_INPUT',
-          message: 'Room ID, start time, and end time are required'
-        }
-      });
-    }
-    
-    const db = getDb();
-    const conflictingBookings = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM bookings 
-         WHERE room_id = ? 
-         AND status = 'confirmed'
-         AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
-        [room_id, end_time, start_time, end_time, start_time],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(rows);
-        }
-      );
-    });
-    
-    const isAvailable = conflictingBookings.length === 0;
-    
-    res.json({
-      success: true,
-      data: {
-        available: isAvailable,
-        conflicting_bookings: conflictingBookings
-      }
-    });
-  } catch (error) {
-    console.error('Check availability error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Internal server error'
-      }
-    });
-  }
-});
-
 // Create new booking
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { room_id, title, start_time, end_time } = req.body;
-    const user_id = req.user.userId;
-    
+
     if (!room_id || !title || !start_time || !end_time) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'All fields are required'
+          message: 'Room ID, title, start time, and end time are required'
         }
       });
     }
-    
-    // Check if room exists
-    const db = getDb();
-    const room = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM rooms WHERE id = ?',
-        [room_id],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
+
+    // Convert dates
+    const startTime = new Date(start_time);
+    const endTime = new Date(end_time);
+
+    // Validate date format
+    if (isNaN(startTime) || isNaN(endTime)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_DATE',
+          message: 'Invalid date format'
         }
-      );
+      });
+    }
+
+    // Check if end time is after start time
+    if (endTime <= startTime) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TIME_RANGE',
+          message: 'End time must be after start time'
+        }
+      });
+    }
+
+    // Check if room exists
+    const room = await db.room.findUnique({
+      where: { id: parseInt(room_id) }
     });
-    
+
     if (!room) {
       return res.status(404).json({
         success: false,
@@ -235,26 +186,41 @@ router.post('/', authenticateToken, async (req, res) => {
         }
       });
     }
-    
+
     // Check availability
-    const conflictingBookings = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM bookings 
-         WHERE room_id = ? 
-         AND status = 'confirmed'
-         AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
-        [room_id, end_time, start_time, end_time, start_time],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
+    const conflictingBooking = await db.booking.findFirst({
+      where: {
+        roomId: parseInt(room_id),
+        status: 'confirmed',
+        id: {
+          not: req.body.id ? parseInt(req.body.id) : undefined
+        },
+        OR: [
+          {
+            startTime: {
+              lte: endTime,
+              gte: startTime
+            }
+          },
+          {
+            endTime: {
+              lte: endTime,
+              gte: startTime
+            }
+          },
+          {
+            startTime: {
+              lte: startTime
+            },
+            endTime: {
+              gte: endTime
+            }
           }
-          resolve(rows);
-        }
-      );
+        ]
+      }
     });
-    
-    if (conflictingBookings.length > 0) {
+
+    if (conflictingBooking) {
       return res.status(409).json({
         success: false,
         error: {
@@ -263,43 +229,35 @@ router.post('/', authenticateToken, async (req, res) => {
         }
       });
     }
-    
-// Create booking
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO bookings (room_id, user_id, title, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
-        [room_id, user_id, title, start_time, end_time],
-        async function(err) {
-          if (err) {
-            reject(err);
-            return;
+
+    // Create booking
+    const booking = await db.booking.create({
+      data: {
+        roomId: parseInt(room_id),
+        userId: req.user.userId,
+        title,
+        startTime,
+        endTime,
+        status: 'confirmed'
+      },
+      include: {
+        user: {
+          select: {
+            username: true
           }
-          
-          const user = await new Promise((resolve, reject) => {
-            db.get('SELECT username FROM users WHERE id = ?', [user_id], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-          
-          resolve({ id: this.lastID, username: user?.username });
+        },
+        room: {
+          select: {
+            name: true
+          }
         }
-      );
+      }
     });
-    
+
     res.status(201).json({
       success: true,
       data: {
-        booking: {
-          id: result.id,
-          room_id,
-          user_id,
-          title,
-          start_time,
-          end_time,
-          status: 'confirmed',
-          username: result.username
-        }
+        booking
       }
     });
   } catch (error) {
@@ -319,25 +277,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { room_id, title, start_time, end_time } = req.body;
-    
-    const db = getDb();
-    
-    // Check if booking exists
-    const booking = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT * FROM bookings WHERE id = ?',
-        [id],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+
+    // Get existing booking
+    const existingBooking = await db.booking.findUnique({
+      where: { id: parseInt(id) }
     });
-    
-    if (!booking) {
+
+    if (!existingBooking) {
       return res.status(404).json({
         success: false,
         error: {
@@ -347,82 +293,118 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if user is admin or owns the booking
-    if (req.user.role !== 'admin' && booking.user_id !== req.user.userId) {
+    // Check ownership
+    if (existingBooking.userId !== req.user.userId && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
           code: 'FORBIDDEN',
-          message: 'You can only edit your own bookings'
+          message: 'You can only modify your own bookings'
         }
       });
     }
 
-    // Check availability (excluding current booking)
-    const conflictingBookings = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM bookings 
-         WHERE room_id = ? 
-         AND status = 'confirmed'
-         AND id != ?
-         AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))`,
-        [room_id || booking.room_id, id, end_time || booking.end_time, start_time || booking.start_time, end_time || booking.end_time, start_time || booking.start_time],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
+    // Prepare update data
+    const updateData = {
+      title: title || existingBooking.title
+    };
+
+    if (room_id !== undefined || start_time !== undefined || end_time !== undefined) {
+      const roomId = room_id !== undefined ? parseInt(room_id) : existingBooking.roomId;
+      const startTime = start_time ? new Date(start_time) : existingBooking.startTime;
+      const endTime = end_time ? new Date(end_time) : existingBooking.endTime;
+
+      // Validate dates
+      if (isNaN(startTime) || isNaN(endTime)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_DATE',
+            message: 'Invalid date format'
           }
-          resolve(rows);
-        }
-      );
-    });
-    
-    if (conflictingBookings.length > 0) {
-      return res.status(409).json({
-        success: false,
-        error: {
-          code: 'ROOM_NOT_AVAILABLE',
-          message: 'Room is not available for the selected time slot'
+        });
+      }
+
+      if (endTime <= startTime) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TIME_RANGE',
+            message: 'End time must be after start time'
+          }
+        });
+      }
+
+      // Check availability (excluding current booking)
+      const conflictingBooking = await db.booking.findFirst({
+        where: {
+          roomId: roomId,
+          status: 'confirmed',
+          id: {
+            not: parseInt(id)
+          },
+          OR: [
+            {
+              startTime: {
+                lte: endTime,
+                gte: startTime
+              }
+            },
+            {
+              endTime: {
+                lte: endTime,
+                gte: startTime
+              }
+            },
+            {
+              startTime: {
+                lte: startTime
+              },
+              endTime: {
+                gte: endTime
+              }
+            }
+          ]
         }
       });
+
+      if (conflictingBooking) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'ROOM_NOT_AVAILABLE',
+            message: 'Room is not available for the selected time slot'
+          }
+        });
+      }
+
+      updateData.roomId = roomId;
+      updateData.startTime = startTime;
+      updateData.endTime = endTime;
     }
-    
+
     // Update booking
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'UPDATE bookings SET room_id = ?, title = ?, start_time = ?, end_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [room_id || booking.room_id, title || booking.title, start_time || booking.start_time, end_time || booking.end_time, id],
-        function(err) {
-          if (err) {
-            reject(err);
-            return;
+    const updatedBooking = await db.booking.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            username: true
           }
-          resolve({ changes: this.changes });
+        },
+        room: {
+          select: {
+            name: true
+          }
         }
-      );
+      }
     });
-    
-    // Get username
-    const user = await new Promise((resolve, reject) => {
-      db.get('SELECT username FROM users WHERE id = ?', [booking.user_id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
-    
+
     res.json({
       success: true,
       data: {
-        booking: {
-          id: parseInt(id),
-          room_id: room_id || booking.room_id,
-          user_id: booking.user_id,
-          title: title || booking.title,
-          start_time: start_time || booking.start_time,
-          end_time: end_time || booking.end_time,
-          status: booking.status,
-          username: user?.username
-        }
+        booking: updatedBooking
       }
     });
   } catch (error) {
@@ -441,22 +423,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const db = getDb();
-    
+
     // Check ownership before deleting
-    const booking = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT user_id FROM bookings WHERE id = ?',
-        [id],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
+    const booking = await db.booking.findUnique({
+      where: { id: parseInt(id) }
     });
 
     if (!booking) {
@@ -469,8 +439,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Admin can delete any booking, users can only delete their own
-    if (req.user.role !== 'admin' && booking.user_id !== req.user.userId) {
+    // Check ownership
+    if (booking.userId !== req.user.userId && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -480,36 +450,95 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'DELETE FROM bookings WHERE id = ?',
-        [id],
-        function(err) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve({ changes: this.changes });
-        }
-      );
+    await db.booking.delete({
+      where: { id: parseInt(id) }
     });
-    
-    if (result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: 'BOOKING_NOT_FOUND',
-          message: 'Booking not found'
-        }
-      });
-    }
-    
+
     res.json({
       success: true,
       message: 'Booking deleted successfully'
     });
   } catch (error) {
     console.error('Delete booking error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
+});
+
+// Check availability
+router.get('/availability/check', async (req, res) => {
+  try {
+    const { room_id, start_time, end_time } = req.query;
+
+    if (!room_id || !start_time || !end_time) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'Room ID, start time, and end time are required'
+        }
+      });
+    }
+
+    const startTime = new Date(start_time);
+    const endTime = new Date(end_time);
+
+    // Validate date format
+    if (isNaN(startTime) || isNaN(endTime)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_DATE',
+          message: 'Invalid date format'
+        }
+      });
+    }
+
+    const conflictingBookings = await db.booking.findMany({
+      where: {
+        roomId: parseInt(room_id),
+        status: 'confirmed',
+        OR: [
+          {
+            startTime: {
+              lte: endTime,
+              gte: startTime
+            }
+          },
+          {
+            endTime: {
+              lte: endTime,
+              gte: startTime
+            }
+          },
+          {
+            startTime: {
+              lte: startTime
+            },
+            endTime: {
+              gte: endTime
+            }
+          }
+        ]
+      }
+    });
+
+    const isAvailable = conflictingBookings.length === 0;
+
+    res.json({
+      success: true,
+      data: {
+        available: isAvailable,
+        conflicting_bookings: conflictingBookings
+      }
+    });
+  } catch (error) {
+    console.error('Check availability error:', error);
     res.status(500).json({
       success: false,
       error: {

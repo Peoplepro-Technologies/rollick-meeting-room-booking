@@ -41,11 +41,12 @@ A full-stack meeting room reservation application with calendar interface, user 
 
 3. **Setup environment variables**
    ```bash
-   # Root directory
+   # Server environment
+   cd server
    cp .env.example .env
    
-   # Server directory
-   cd server
+   # Client environment
+   cd ../client
    cp .env.example .env
    ```
 

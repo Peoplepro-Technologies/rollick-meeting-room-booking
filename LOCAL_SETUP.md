@@ -1,99 +1,326 @@
-# Meeting Room Booking - Local Development Setup
+# Local Development Setup
 
-## Overview
-This application consists of two separate services:
-- **Backend**: Node.js/Express server running on port 5000
-- **Frontend**: React/Vite application running on port 3000
-
-## Database
-- **Development**: SQLite (file-based for local development)
-- **Production**: PostgreSQL (managed on Railway)
-
-## Prisma ORM
-The application uses Prisma as the ORM with dual database support:
-- Local development uses SQLite
-- Production deployment on Railway uses PostgreSQL
+Complete guide for setting up the Meeting Room Booking System on your local machine.
 
 ## Prerequisites
-- Node.js (v16 or higher)
-- npm
 
-## Installation
+- **Node.js** 18 or higher
+- **npm** or **yarn**
+- **Git**
 
-1. Install all dependencies:
+## Step-by-Step Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd ROLLICK-MEETING-ROOM-BOOKING
+```
+
+### 2. Install Root Dependencies
+
+```bash
+npm install
+```
+
+This installs `concurrently` for running both servers together.
+
+### 3. Install Server Dependencies
+
+```bash
+cd server
+npm install
+```
+
+Key dependencies:
+- `express` - Web framework
+- `@prisma/client` - Database ORM
+- `jsonwebtoken` - Authentication
+- `bcryptjs` - Password hashing
+- `cors` - Cross-origin requests
+- `dotenv` - Environment variables
+
+### 4. Install Client Dependencies
+
+```bash
+cd ../client
+npm install
+```
+
+Key dependencies:
+- `react` - UI framework
+- `@mui/material` - Material-UI components
+- `@fullcalendar/react` - Calendar component
+- `axios` - HTTP client
+- `react-router-dom` - Routing
+- `date-fns` - Date utilities
+
+### 5. Or Install All at Once
+
+From the project root:
+
 ```bash
 npm run install:all
 ```
 
-2. Set up Prisma and database:
+## Environment Configuration
+
+### Server Environment
+
+Create `server/.env`:
+
 ```bash
-# Navigate to server directory
 cd server
-
-# Generate Prisma client
-npm run db:generate
-
-# Create and run migrations
-npm run db:migrate
-
-# Seed the database with initial data
-npm run db:seed
+cp .env.example .env
 ```
+
+Edit `server/.env`:
+
+```bash
+PORT=5000
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+NODE_ENV=development
+DATABASE_URL="file:./server/database.sqlite"
+FRONTEND_URL=http://localhost:3000
+```
+
+### Client Environment
+
+Create `client/.env`:
+
+```bash
+cd client
+cp .env.example .env
+```
+
+Edit `client/.env`:
+
+```bash
+VITE_API_URL=http://localhost:5000/api
+```
+
+## Database Setup (Local SQLite)
+
+### 1. Generate Prisma Client
+
+```bash
+cd server
+npx prisma generate
+```
+
+### 2. Create Initial Migration
+
+```bash
+npx prisma migrate dev --name init
+```
+
+This creates:
+- SQLite database at `server/prisma/server/database.sqlite`
+- Migration files in `server/prisma/migrations/`
+
+### 3. Seed the Database
+
+```bash
+npx prisma db seed
+```
+
+This creates:
+- Admin user: `admin@meetingroom.com` / `admin123`
+- 3 sample rooms
+- 1 sample booking
+
+### 4. (Optional) Open Prisma Studio
+
+```bash
+npx prisma studio
+```
+
+Opens a GUI to view/edit your database at `http://localhost:5555`
 
 ## Running the Application
 
-Start both servers simultaneously:
+### Option 1: Both Services Together
+
+From the project root:
+
 ```bash
 npm run dev
 ```
 
-This will start:
-- Backend server: http://localhost:5000
-- Frontend application: http://localhost:3000
+This runs both servers concurrently:
+- Backend: `http://localhost:5000`
+- Frontend: `http://localhost:3000`
 
-## Database Management
-- **Prisma Studio**: `npm run db:studio` (web-based database GUI)
-- **Database file**: `dev.db` (SQLite)
-- **Environment variables**: Configure in `.env` file
+### Option 2: Separate Terminals
 
-## Default Admin Credentials
-- Email: admin@meetingroom.com
-- Password: admin123
-
-## Development
-- Backend automatically restarts on file changes (nodemon)
-- Frontend supports hot module replacement (Vite HMR)
-
-## API Endpoints
-- Base URL: http://localhost:5000/api
-- Authentication: `/auth/login`, `/auth/register`
-- Rooms: `/rooms`
-- Bookings: `/bookings`
-- Users: `/users`
-
-## Railway Deployment
-The application is configured for Railway deployment:
-- **Database**: Automatically provisioned PostgreSQL service
-- **Environment Variables**: 
-  - `DATABASE_PROVIDER=postgresql`
-  - `DATABASE_URL` from Railway's PostgreSQL service
-- **Build Command**: Automatically runs `npm run db:generate`
-
-## Local Database Commands
+**Terminal 1 - Backend:**
 ```bash
-# Generate Prisma client (after schema changes)
-npm run db:generate
-
-# Create new migration
-npx prisma migrate dev --name migration-name
-
-# Reset database (destructive)
-npx prisma migrate reset
-
-# Studio (database GUI)
-npm run db:studio
+cd server
+npm run dev
 ```
 
-## Notes
-- SQLite database (`dev.db`) is automatically created on first run
-- Frontend proxies API requests to backend via Vite proxy config
+**Terminal 2 - Frontend:**
+```bash
+cd client
+npm run dev
+```
+
+## Verify Installation
+
+1. **Backend Health Check**
+   ```bash
+   curl http://localhost:5000/api/rooms
+   ```
+   Should return a JSON array of rooms.
+
+2. **Frontend Access**
+   - Open browser: `http://localhost:3000`
+   - Login with: `admin@meetingroom.com` / `admin123`
+
+## Common Issues & Solutions
+
+### Port Already in Use
+
+**Error**: `Error: listen EADDRINUSE: address already in use :::5000`
+
+**Solution**:
+```bash
+# Find process using port 5000
+lsof -i :5000
+# Kill the process
+kill -9 <PID>
+```
+
+### Prisma Client Not Generated
+
+**Error**: `Error: @prisma/client did not initialize yet`
+
+**Solution**:
+```bash
+cd server
+npx prisma generate
+```
+
+### Database Locked
+
+**Error**: `Database is locked`
+
+**Solution**:
+```bash
+# Delete journal file
+cd server/prisma/server
+rm database.sqlite-journal
+```
+
+### CORS Errors
+
+**Error**: API calls blocked by CORS policy
+
+**Solution**: Check `server/.env` has correct `FRONTEND_URL`
+
+### Module Not Found
+
+**Error**: `Cannot find module 'xyz'`
+
+**Solution**:
+```bash
+cd <server-or-client>
+npm install
+```
+
+## Development Workflow
+
+### Making Changes
+
+1. **Backend Changes**: Restart server automatically with `nodemon`
+2. **Frontend Changes**: Vite hot-reloads automatically
+3. **Database Schema Changes**:
+   ```bash
+   cd server
+   npx prisma migrate dev --name your_change
+   ```
+
+### Running Tests
+
+```bash
+# Backend tests (if configured)
+cd server
+npm test
+
+# Frontend tests (if configured)
+cd client
+npm test
+```
+
+### Building for Production
+
+```bash
+# Build client
+cd client
+npm run build
+
+# Output in client/dist/
+```
+
+## IDE Setup
+
+### VS Code Extensions (Recommended)
+
+- ESLint
+- Prettier
+- Prisma
+- TypeScript
+- GitLens
+
+### VS Code Settings
+
+Create `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.tsdk": "client/node_modules/typescript/lib"
+}
+```
+
+## Database Management
+
+### View All Data
+
+```bash
+npx prisma studio
+```
+
+### Reset Database
+
+```bash
+npx prisma migrate reset
+```
+
+⚠️ **Warning**: This deletes all data!
+
+### Create New Migration
+
+```bash
+npx prisma migrate dev --name describe_your_change
+```
+
+## Next Steps
+
+- Read [README.md](./README.md) for overview
+- Read [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for production deployment
+- Explore the codebase in `server/src/` and `client/src/`
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check terminal error messages
+2. Verify all environment variables are set
+3. Ensure all dependencies are installed
+4. Try clearing node_modules and reinstalling:
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```

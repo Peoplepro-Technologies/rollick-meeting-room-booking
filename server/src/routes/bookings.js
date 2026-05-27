@@ -64,10 +64,23 @@ router.get('/', authenticateToken, async (req, res) => {
       orderBy: { startTime: 'asc' }
     });
 
+    // Transform to snake_case for frontend
+    const transformedBookings = bookings.map(booking => ({
+      id: booking.id,
+      room_id: booking.roomId,
+      user_id: booking.userId,
+      title: booking.title,
+      start_time: booking.startTime.toISOString(),
+      end_time: booking.endTime.toISOString(),
+      status: booking.status,
+      username: booking.user?.username,
+      room_name: booking.room?.name
+    }));
+
     res.json({
       success: true,
       data: {
-        bookings
+        bookings: transformedBookings
       }
     });
   } catch (error) {
@@ -113,10 +126,23 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Transform to snake_case for frontend
+    const transformedBooking = {
+      id: booking.id,
+      room_id: booking.roomId,
+      user_id: booking.userId,
+      title: booking.title,
+      start_time: booking.startTime.toISOString(),
+      end_time: booking.endTime.toISOString(),
+      status: booking.status,
+      username: booking.user?.username,
+      room_name: booking.room?.name
+    };
+
     res.json({
       success: true,
       data: {
-        booking
+        booking: transformedBooking
       }
     });
   } catch (error) {
@@ -254,10 +280,23 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     });
 
+    // Transform to snake_case for frontend
+    const transformedBooking = {
+      id: booking.id,
+      room_id: booking.roomId,
+      user_id: booking.userId,
+      title: booking.title,
+      start_time: booking.startTime.toISOString(),
+      end_time: booking.endTime.toISOString(),
+      status: booking.status,
+      username: booking.user?.username,
+      room_name: booking.room?.name
+    };
+
     res.status(201).json({
       success: true,
       data: {
-        booking
+        booking: transformedBooking
       }
     });
   } catch (error) {
@@ -401,10 +440,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
+    // Transform to snake_case for frontend
+    const transformedBooking = {
+      id: updatedBooking.id,
+      room_id: updatedBooking.roomId,
+      user_id: updatedBooking.userId,
+      title: updatedBooking.title,
+      start_time: updatedBooking.startTime.toISOString(),
+      end_time: updatedBooking.endTime.toISOString(),
+      status: updatedBooking.status,
+      username: updatedBooking.user?.username,
+      room_name: updatedBooking.room?.name
+    };
+
     res.json({
       success: true,
       data: {
-        booking: updatedBooking
+        booking: transformedBooking
       }
     });
   } catch (error) {

@@ -3,13 +3,7 @@ import { PrismaClient } from '@prisma/client'
 let globalForPrisma = globalThis.prisma
 
 if (!globalForPrisma) {
-  globalForPrisma = new PrismaClient({
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL || "file:./server/database.sqlite"
-      }
-    }
-  })
+  globalForPrisma = new PrismaClient()
 
   if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.$connect()

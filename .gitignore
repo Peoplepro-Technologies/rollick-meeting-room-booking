@@ -14,5 +14,4 @@ node_modules/
 database.sqlite
 
 # Build outputs
-client/dist/
 server/dist/

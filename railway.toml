@@ -1,5 +1,0 @@
-[build]
-buildCommand = "cd client && npm install --include=dev && cd ../server && npm install && cd .. && npm run build"
-
-[deploy]
-startCommand = "npm start"

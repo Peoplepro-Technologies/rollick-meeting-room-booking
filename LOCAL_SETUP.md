@@ -17,22 +17,35 @@ git clone <repository-url>
 cd ROLLICK-MEETING-ROOM-BOOKING
 ```
 
-### 2. Install Root Dependencies
+### 2. Install All Dependencies
 
+**Option A: Install everything at once**
 ```bash
-npm install
+npm run install:all
 ```
+This installs root dependencies (concurrently) and all subdirectory dependencies.
 
-This installs `concurrently` for running both servers together.
-
-### 3. Install Server Dependencies
-
+**Option B: Install separately**
 ```bash
+# Root dependencies (includes concurrently)
+npm install
+
+# Server dependencies
 cd server
 npm install
+
+# Client dependencies
+cd ../client
+npm install
+cd ..
 ```
 
-Key dependencies:
+### 3. Dependencies Overview
+
+**Root:**
+- `concurrently` - Run multiple npm scripts together
+
+**Server:**
 - `express` - Web framework
 - `@prisma/client` - Database ORM
 - `jsonwebtoken` - Authentication
@@ -40,28 +53,13 @@ Key dependencies:
 - `cors` - Cross-origin requests
 - `dotenv` - Environment variables
 
-### 4. Install Client Dependencies
-
-```bash
-cd ../client
-npm install
-```
-
-Key dependencies:
+**Client:**
 - `react` - UI framework
 - `@mui/material` - Material-UI components
 - `@fullcalendar/react` - Calendar component
 - `axios` - HTTP client
 - `react-router-dom` - Routing
 - `date-fns` - Date utilities
-
-### 5. Or Install All at Once
-
-From the project root:
-
-```bash
-npm run install:all
-```
 
 ## Environment Configuration
 
@@ -80,7 +78,7 @@ Edit `server/.env`:
 PORT=5000
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 NODE_ENV=development
-DATABASE_URL="file:./server/database.sqlite"
+DATABASE_URL="file:./dev.db"
 FRONTEND_URL=http://localhost:3000
 ```
 
@@ -115,7 +113,7 @@ npx prisma migrate dev --name init
 ```
 
 This creates:
-- SQLite database at `server/prisma/server/database.sqlite`
+- SQLite database at `server/prisma/dev.db`
 - Migration files in `server/prisma/migrations/`
 
 ### 3. Seed the Database
@@ -208,8 +206,8 @@ npx prisma generate
 **Solution**:
 ```bash
 # Delete journal file
-cd server/prisma/server
-rm database.sqlite-journal
+cd server/prisma
+rm dev.db-journal
 ```
 
 ### CORS Errors

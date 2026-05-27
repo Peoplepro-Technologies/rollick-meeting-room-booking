@@ -38,6 +38,7 @@ A full-stack meeting room reservation application with calendar interface, user 
    ```bash
    npm run install:all
    ```
+   This installs root dependencies (concurrently) and all subdirectory dependencies.
 
 3. **Setup environment variables**
    ```bash
@@ -61,10 +62,11 @@ A full-stack meeting room reservation application with calendar interface, user 
 ## Running the Application
 
 ### Development (Both Frontend & Backend)
+From the **project root** directory:
 ```bash
 npm run dev
 ```
-This starts:
+This starts both servers:
 - Backend on `http://localhost:5000`
 - Frontend on `http://localhost:3000`
 
@@ -163,7 +165,7 @@ ROLLICK-MEETING-ROOM-BOOKING/
 PORT=5000
 JWT_SECRET=your-super-secret-jwt-key
 NODE_ENV=development
-DATABASE_URL="file:./server/database.sqlite"
+DATABASE_URL="file:./dev.db"
 FRONTEND_URL=http://localhost:3000
 ```
 

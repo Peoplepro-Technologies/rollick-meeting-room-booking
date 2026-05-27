@@ -16,50 +16,13 @@ export async function seedDatabase() {
     },
   })
 
-  // Create some sample rooms
-  const rooms = await Promise.all([
-    db.room.create({
-      data: {
-        name: 'Conference Room A',
-        capacity: 10,
-        location: '1st Floor',
-        description: 'Large conference room with projector',
-      },
-    }),
-    db.room.create({
-      data: {
-        name: 'Meeting Room B',
-        capacity: 6,
-        location: '2nd Floor',
-        description: 'Small meeting room for team discussions',
-      },
-    }),
-    db.room.create({
-      data: {
-        name: 'Board Room',
-        capacity: 12,
-        location: '3rd Floor',
-        description: 'Executive meeting room',
-      },
-    }),
-  ])
-
-  // Create sample booking
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  tomorrow.setHours(9, 0, 0, 0)
-
-  const endTime = new Date(tomorrow)
-  endTime.setHours(10, 0, 0, 0)
-
-  await db.booking.create({
+  // Create single room
+  const room = await db.room.create({
     data: {
-      title: 'Team Meeting',
-      startTime: tomorrow,
-      endTime: endTime,
-      userId: adminUser.id,
-      roomId: rooms[0].id,
-      status: 'confirmed',
+      name: 'Meeting Room',
+      capacity: 10,
+      location: '1st Floor',
+      description: 'General purpose meeting room',
     },
   })
 

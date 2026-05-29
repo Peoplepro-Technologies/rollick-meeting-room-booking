@@ -17,7 +17,7 @@ async function initializeDatabase() {
     
     console.log('✅ Database initialized successfully!');
     console.log('📁 Database file location:', path.join(__dirname, '../database.sqlite'));
-    console.log('👤 Default admin user: admin@meetingroom.com / admin123');
+    console.log('👤 Default admin user: admin / Admin@1234 (email: admin@rollick.co.in)');
     console.log('🏢 Sample rooms and bookings have been created');
     
     // Close connection

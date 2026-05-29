@@ -35,7 +35,7 @@ class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        name TEXT NOT NULL,
+        username TEXT NOT NULL,
         role TEXT DEFAULT 'user',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -92,7 +92,11 @@ class Database {
     }
 
     // Seed database if empty
-    await this.seedDatabase();
+    try {
+      await this.seedDatabase();
+    } catch (error) {
+      console.log('Database seeding skipped (already seeded or error):', error.message);
+    }
   }
 
   async seedDatabase() {
@@ -107,8 +111,8 @@ class Database {
       
       // Insert admin user
       await this.run(
-        `INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)`,
-        ['admin@meetingroom.com', hashedPassword, 'admin', 'admin']
+        `INSERT INTO users (email, password, username, role) VALUES (?, ?, ?, ?)`,
+        ['admin@rollick.co.in', hashedPassword, 'admin', 'admin']
       );
       
       // Insert sample rooms
@@ -190,8 +194,8 @@ class Database {
       let query = 'SELECT * FROM users';
       const params = [];
       
-      if (options.orderBy?.name === 'asc') {
-        query += ' ORDER BY name ASC';
+      if (options.orderBy?.username === 'asc') {
+        query += ' ORDER BY username ASC';
       }
       
       const rows = await this.all(query, params);
@@ -231,8 +235,8 @@ class Database {
       const hashedPassword = await bcrypt.hash(data.password, 10);
       
       const result = await this.run(
-        `INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)`,
-        [data.email, hashedPassword, data.name, data.role || 'user']
+        `INSERT INTO users (email, password, username, role) VALUES (?, ?, ?, ?)`,
+        [data.email, hashedPassword, data.username, data.role || 'user']
       );
       
       return this.user.findUnique({ where: { id: result.id } });
@@ -251,9 +255,9 @@ class Database {
         setClause.push('password = ?');
         params.push(await bcrypt.hash(data.password, 10));
       }
-      if (data.name) {
-        setClause.push('name = ?');
-        params.push(data.name);
+      if (data.username) {
+        setClause.push('username = ?');
+        params.push(data.username);
       }
       if (data.role) {
         setClause.push('role = ?');

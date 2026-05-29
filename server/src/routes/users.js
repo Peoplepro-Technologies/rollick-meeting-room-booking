@@ -123,7 +123,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         data: {
           username,
           email: email.toLowerCase(),
-          passwordHash,
+          password: passwordHash,
           role: role || 'user'
         },
         select: {

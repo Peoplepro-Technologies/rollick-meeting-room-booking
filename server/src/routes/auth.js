@@ -20,10 +20,17 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // Find user by email (admin login uses email as username)
-    const user = await db.user.findUnique({
+    // Find user by email or username (admin login can use either)
+    let user = await db.user.findUnique({
       where: { email: username }
     });
+    
+    // If not found by email, try to find by username
+    if (!user) {
+      user = await db.user.findUnique({
+        where: { username: username }
+      });
+    }
 
     if (!user) {
       return res.status(401).json({

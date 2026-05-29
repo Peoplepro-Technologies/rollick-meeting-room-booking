@@ -126,9 +126,6 @@ export const DashboardPage: React.FC = () => {
       </AppBar>
 
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard
-        </Typography>
         
         <RoomTabs
           rooms={rooms}

@@ -1,179 +1,165 @@
-# Meeting Room Booking System
+# Meeting Room Booking System - Simplified Version
 
-A full-stack meeting room reservation application with calendar interface, user authentication, and admin management.
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| **Frontend** | React 18, TypeScript, Material-UI, Vite |
-| **Backend** | Express.js, Prisma ORM |
-| **Database** | SQLite (local) / PostgreSQL (Railway) |
-| **Calendar** | FullCalendar |
-| **Auth** | JWT (bcrypt) |
+A simplified meeting room booking application with calendar interface, now using in-memory database instead of Prisma.
 
 ## Features
 
-- **Calendar Interface**: View and manage bookings by room
-- **User Authentication**: Role-based access (admin/user)
-- **Room Management**: Multiple meeting rooms with capacities
-- **Booking System**: Create, view, and cancel reservations
-- **Admin Panel**: User and room management
-- **Theme Customization**: Palette and text color options
+- **Room Management**: Create, view, update, and delete meeting rooms
+- **Booking System**: Book rooms with time slots and calendar view
+- **User Authentication**: Admin and user roles with JWT authentication
+- **Responsive UI**: Material-UI based interface with full calendar integration
+- **Local Network Access**: Can be accessed from other PCs on the same network
 
-## Prerequisites
+## Changes Made
 
-- Node.js 18+
+This version has been simplified to remove external dependencies:
+
+- ❌ **Removed**: Prisma ORM and database migrations
+- ❌ **Removed**: Railway deployment configuration
+- ✅ **Added**: SQLite database for persistent storage
+- ✅ **Added**: Local network setup guide
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18 or higher
 - npm or yarn
 
-## Installation
+### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ROLLICK-MEETING-ROOM-BOOKING
-   ```
-
-2. **Install dependencies**
+1. **Clone and install dependencies**:
    ```bash
    npm run install:all
    ```
-   This installs root dependencies (concurrently) and all subdirectory dependencies.
 
-3. **Setup environment variables**
+2. **Configure environment**:
    ```bash
    # Server environment
    cd server
    cp .env.example .env
    
-   # Client environment
+   # Client environment  
    cd ../client
    cp .env.example .env
    ```
 
-4. **Initialize database (local)**
+3. **Initialize database**:
    ```bash
    cd server
-   npm run db:generate
-   npm run db:migrate
-   npm run db:seed
+   npm run db:init
    ```
 
-## Running the Application
+4. **Start the application**:
+   ```bash
+   # From project root
+   npm run dev
+   ```
 
-### Development (Both Frontend & Backend)
-From the **project root** directory:
-```bash
-npm run dev
-```
-This starts both servers:
-- Backend on `http://localhost:5000`
-- Frontend on `http://localhost:3000`
+4. **Access the application**:
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:5000/api`
 
-### Individual Services
-
-**Backend only:**
-```bash
-cd server
-npm run dev
-```
-
-**Frontend only:**
-```bash
-cd client
-npm run dev
-```
-
-## Default Admin Account
+### Default Login
 
 - **Email**: `admin@meetingroom.com`
 - **Password**: `admin123`
 
-> ⚠️ **Change this password in production!**
+## Database
 
-## API Endpoints
+This version uses **SQLite** for persistent storage that:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/login` | POST | User login |
-| `/api/auth/logout` | POST | User logout |
-| `/api/auth/me` | GET | Get current user |
-| `/api/bookings` | GET/POST | List/create bookings |
-| `/api/bookings/:id` | DELETE | Cancel booking |
-| `/api/rooms` | GET | List all rooms |
-| `/api/users` | GET | List all users (admin) |
-| `/api/theme` | GET/PUT | Theme settings |
+- Automatically initializes with sample data
+- Includes admin user, sample rooms, and bookings
+- Persists data between server restarts
+- Stores data in a single file (`server/database.sqlite`)
+- Is suitable for development and small-scale production
 
-## Database Management
+### Database Features
 
-**Generate Prisma Client:**
-```bash
-cd server
-npm run db:generate
-```
+- **File-based**: Single database file
+- **Persistent**: Data survives server restarts
+- **Easy backup**: Just copy the database file
+- **No external services**: Embedded database
 
-**Run Migrations:**
-```bash
-cd server
-npm run db:migrate
-```
+## Local Network Setup
 
-**Open Prisma Studio:**
-```bash
-cd server
-npm run db:studio
-```
+To run the application on your local network so other PCs can access it:
 
-**Seed Database:**
-```bash
-cd server
-npm run db:seed
-```
+1. **Find your PC's IP address**
+2. **Update environment variables** to use your IP instead of localhost
+3. **Start the application** with `npm run dev`
+4. **Access from other PCs** using `http://YOUR_IP:3000`
 
-## Railway Deployment
-
-See [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for detailed deployment instructions.
-
-Quick deploy:
-```bash
-railway up
-```
+See [LOCAL_NETWORK_SETUP.md](./LOCAL_NETWORK_SETUP.md) for detailed instructions.
 
 ## Project Structure
 
 ```
 ROLLICK-MEETING-ROOM-BOOKING/
-├── client/                 # React frontend
+├── server/
 │   ├── src/
-│   │   ├── pages/         # Login, Dashboard, Admin
-│   │   ├── components/    # Calendar, BookingForm, etc.
-│   │   ├── api/           # Axios client
-│   │   └── context/       # AuthContext
-│   └── dist/              # Build output
-├── server/                 # Express backend
-│   ├── src/
-│   │   ├── routes/        # API routes
-│   │   └── lib/           # Database client
-│   └── prisma/            # Database schema & migrations
-└── README.md
+│   │   ├── lib/
+│   │   │   └── db.js          # In-memory database
+│   │   ├── routes/            # API routes
+│   │   └── app.js             # Main server file
+│   └── package.json
+├── client/
+│   ├── src/                   # React components
+│   └── vite.config.ts
+└── package.json
 ```
 
-## Environment Variables
+## Development
 
-### Server (.env)
+### Backend Development
+
 ```bash
-PORT=5000
-JWT_SECRET=your-super-secret-jwt-key
-NODE_ENV=development
-DATABASE_URL="file:./dev.db"
-FRONTEND_URL=http://localhost:3000
+cd server
+npm run dev
 ```
 
-### Client (.env)
+### Frontend Development
+
 ```bash
-VITE_API_URL=http://localhost:5000/api
+cd client
+npm run dev
 ```
 
-## License
+### Both Services
 
-MIT
+```bash
+npm run dev
+```
+
+## API Endpoints
+
+- `POST /api/auth/login` - User login
+- `GET /api/rooms` - Get all rooms
+- `POST /api/rooms` - Create room (admin)
+- `PUT /api/rooms/:id` - Update room (admin)
+- `DELETE /api/rooms/:id` - Delete room (admin)
+- `GET /api/bookings` - Get bookings
+- `POST /api/bookings` - Create booking
+- `PUT /api/bookings/:id` - Update booking
+- `DELETE /api/bookings/:id` - Delete booking
+- `GET /api/theme` - Get theme settings
+
+## Security Notes
+
+- This version uses in-memory storage and is NOT suitable for production
+- Change the default JWT secret in production
+- Use HTTPS in production environments
+- Implement proper user authentication and authorization
+
+## Future Enhancements
+
+To make this production-ready, consider:
+
+1. **Persistent Database**: Add PostgreSQL, MySQL, or MongoDB
+2. **User Management**: Add user registration and profile management
+3. **Email Notifications**: Send booking confirmations and reminders
+4. **Recurring Bookings**: Support for recurring meeting patterns
+5. **Calendar Integration**: Google Calendar, Outlook integration
+6. **Mobile App**: React Native or PWA version
+7. **Advanced Features**: Room equipment management, approval workflows

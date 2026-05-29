@@ -47,11 +47,11 @@ cd ..
 
 **Server:**
 - `express` - Web framework
-- `@prisma/client` - Database ORM
 - `jsonwebtoken` - Authentication
 - `bcryptjs` - Password hashing
 - `cors` - Cross-origin requests
 - `dotenv` - Environment variables
+- `sqlite3` - SQLite database
 
 **Client:**
 - `react` - UI framework
@@ -78,7 +78,7 @@ Edit `server/.env`:
 PORT=5000
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 NODE_ENV=development
-DATABASE_URL="file:./dev.db"
+DATABASE_URL=./database.sqlite
 FRONTEND_URL=http://localhost:3000
 ```
 
@@ -97,43 +97,38 @@ Edit `client/.env`:
 VITE_API_URL=http://localhost:5000/api
 ```
 
-## Database Setup (Local SQLite)
+## Database Setup (SQLite)
 
-### 1. Generate Prisma Client
+The application uses SQLite for persistent data storage.
+
+### 1. Initialize Database
 
 ```bash
 cd server
-npx prisma generate
-```
-
-### 2. Create Initial Migration
-
-```bash
-npx prisma migrate dev --name init
+npm run db:init
 ```
 
 This creates:
-- SQLite database at `server/prisma/dev.db`
-- Migration files in `server/prisma/migrations/`
+- SQLite database file at `server/database.sqlite`
+- Database tables (users, rooms, bookings, themes)
+- Sample data including:
+  - Admin user: `admin@meetingroom.com` / `admin123`
+  - 3 sample rooms
+  - 1 sample booking
+  - Default theme
 
-### 3. Seed the Database
+### 2. Database Location
 
-```bash
-npx prisma db seed
-```
+The database file is created at:
+- **Default**: `server/database.sqlite`
+- **Custom**: Set `DATABASE_URL` in `server/.env`
 
-This creates:
-- Admin user: `admin@meetingroom.com` / `admin123`
-- 3 sample rooms
-- 1 sample booking
+### 3. Database Features
 
-### 4. (Optional) Open Prisma Studio
-
-```bash
-npx prisma studio
-```
-
-Opens a GUI to view/edit your database at `http://localhost:5555`
+- **Persistent**: Data survives server restarts
+- **File-based**: Single file database
+- **Auto-backup**: Easy to backup/restore by copying the database file
+- **No additional services**: Runs embedded in the application
 
 ## Running the Application
 
@@ -189,26 +184,7 @@ lsof -i :5000
 kill -9 <PID>
 ```
 
-### Prisma Client Not Generated
 
-**Error**: `Error: @prisma/client did not initialize yet`
-
-**Solution**:
-```bash
-cd server
-npx prisma generate
-```
-
-### Database Locked
-
-**Error**: `Database is locked`
-
-**Solution**:
-```bash
-# Delete journal file
-cd server/prisma
-rm dev.db-journal
-```
 
 ### CORS Errors
 
@@ -232,11 +208,7 @@ npm install
 
 1. **Backend Changes**: Restart server automatically with `nodemon`
 2. **Frontend Changes**: Vite hot-reloads automatically
-3. **Database Schema Changes**:
-   ```bash
-   cd server
-   npx prisma migrate dev --name your_change
-   ```
+3. **Database Schema Changes**: Modify the table structure in `server/src/lib/db.js` and reinitialize database
 
 ### Running Tests
 
@@ -286,29 +258,53 @@ Create `.vscode/settings.json`:
 
 ### View All Data
 
+You can view the data through the API endpoints or use any SQLite browser tool:
+
+**Recommended Tools:**
+- **DB Browser for SQLite** (https://sqlitebrowser.org/)
+- **VS Code Extension**: SQLite Explorer
+- **Command line**: `sqlite3 server/database.sqlite`
+
+### Backup Database
+
 ```bash
-npx prisma studio
+# Copy the database file
+cp server/database.sqlite backup-$(date +%Y%m%d).sqlite
 ```
 
 ### Reset Database
 
+**Option 1: Delete and recreate**
 ```bash
-npx prisma migrate reset
+rm server/database.sqlite
+cd server
+npm run db:init
 ```
 
-⚠️ **Warning**: This deletes all data!
-
-### Create New Migration
-
+**Option 2: Clear tables only** (preserves structure)
 ```bash
-npx prisma migrate dev --name describe_your_change
+# This will delete all data but keep tables
+sqlite3 server/database.sqlite "DELETE FROM users; DELETE FROM rooms; DELETE FROM bookings; DELETE FROM themes;"
 ```
+
+⚠️ **Warning**: Both options will delete all your data!
+
+### Modify Database Structure
+
+1. **Update schema**: Edit `server/src/lib/db.js`
+2. **Add migration logic**: Update the `initializeTables` method
+3. **Reinitialize**: Delete the database file and run `npm run db:init`
+
+### Database File Location
+
+- **Default**: `server/database.sqlite`
+- **Custom**: Set `DATABASE_URL` in `server/.env` (e.g., `/path/to/your/database.sqlite`)
 
 ## Next Steps
 
 - Read [README.md](./README.md) for overview
-- Read [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for production deployment
 - Explore the codebase in `server/src/` and `client/src/`
+- Check [LOCAL_NETWORK_SETUP.md](./LOCAL_NETWORK_SETUP.md) for network deployment
 
 ## Getting Help
 

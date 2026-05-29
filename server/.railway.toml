@@ -1,6 +1,0 @@
-[build]
-command = "npm install && npm run db:generate"
-
-[env]
-DATABASE_PROVIDER = "postgresql"
-DATABASE_URL = "{{Postgres.DATABASE_URL}}"

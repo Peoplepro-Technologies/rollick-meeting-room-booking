@@ -14,7 +14,6 @@ import themeRoutes from './routes/theme.js';
 
 // Import database
 import db from './lib/db.js';
-import { seedDatabase } from '../prisma/seed.js';
 
 // Load environment variables
 dotenv.config();
@@ -94,18 +93,6 @@ const startServer = async () => {
     // Test database connection
     await db.$connect();
     console.log('Database connected successfully');
-
-    // Check if database has been seeded before
-    const adminUser = await db.user.findUnique({
-      where: { email: 'admin@meetingroom.com' }
-    });
-
-    if (!adminUser) {
-      await seedDatabase();
-      console.log('Database seeded with default admin user');
-    } else {
-      console.log('Database already seeded');
-    }
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);

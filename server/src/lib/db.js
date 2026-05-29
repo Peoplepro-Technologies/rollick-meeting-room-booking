@@ -74,6 +74,8 @@ class Database {
         primaryColor TEXT DEFAULT '#1976d2',
         secondaryColor TEXT DEFAULT '#dc004e',
         backgroundColor TEXT DEFAULT '#ffffff',
+        paletteIndex INTEGER DEFAULT 0,
+        textColorIndex INTEGER DEFAULT 0,
         isActive BOOLEAN DEFAULT 1,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -106,7 +108,7 @@ class Database {
       // Insert admin user
       await this.run(
         `INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)`,
-        ['admin@meetingroom.com', hashedPassword, 'Admin User', 'admin']
+        ['admin@meetingroom.com', hashedPassword, 'admin', 'admin']
       );
       
       // Insert sample rooms
@@ -133,8 +135,8 @@ class Database {
       
       // Insert default theme
       await this.run(
-        `INSERT INTO themes (name, primaryColor, secondaryColor, backgroundColor, isActive) VALUES 
-         ('default', '#1976d2', '#dc004e', '#ffffff', 1)`
+        `INSERT INTO themes (name, primaryColor, secondaryColor, backgroundColor, paletteIndex, textColorIndex, isActive) VALUES 
+         ('default', '#1976d2', '#dc004e', '#ffffff', 0, 0, 1)`
       );
       
       console.log('Database seeded successfully');
@@ -399,6 +401,88 @@ class Database {
       }));
     },
     
+    findFirst: async (options = {}) => {
+      let query = 'SELECT * FROM bookings';
+      const params = [];
+      const conditions = [];
+      
+      if (options.where?.roomId) {
+        conditions.push('roomId = ?');
+        params.push(options.where.roomId);
+      }
+      
+      if (options.where?.userId) {
+        conditions.push('userId = ?');
+        params.push(options.where.userId);
+      }
+      
+      if (options.where?.status) {
+        conditions.push('status = ?');
+        params.push(options.where.status);
+      }
+      
+      if (options.where?.id) {
+        if (options.where.id.not !== undefined) {
+          conditions.push('id != ?');
+          params.push(options.where.id.not);
+        } else {
+          conditions.push('id = ?');
+          params.push(options.where.id);
+        }
+      }
+      
+      if (options.where?.OR) {
+        const orConditions = [];
+        for (const orCondition of options.where.OR) {
+          const orClause = [];
+          if (orCondition.startTime?.lte && orCondition.startTime?.gte) {
+            orClause.push('(startTime <= ? AND startTime >= ?)');
+            params.push(
+              new Date(orCondition.startTime.lte).toISOString(),
+              new Date(orCondition.startTime.gte).toISOString()
+            );
+          }
+          if (orCondition.endTime?.lte && orCondition.endTime?.gte) {
+            orClause.push('(endTime <= ? AND endTime >= ?)');
+            params.push(
+              new Date(orCondition.endTime.lte).toISOString(),
+              new Date(orCondition.endTime.gte).toISOString()
+            );
+          }
+          if (orCondition.startTime?.lte && orCondition.endTime?.gte) {
+            orClause.push('(startTime <= ? AND endTime >= ?)');
+            params.push(
+              new Date(orCondition.startTime.lte).toISOString(),
+              new Date(orCondition.endTime.gte).toISOString()
+            );
+          }
+          if (orClause.length > 0) {
+            orConditions.push('(' + orClause.join(' AND ') + ')');
+          }
+        }
+        if (orConditions.length > 0) {
+          conditions.push('(' + orConditions.join(' OR ') + ')');
+        }
+      }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+      
+      query += ' LIMIT 1';
+      
+      const row = await this.get(query, params);
+      if (!row) return null;
+      
+      return {
+        ...row,
+        startTime: new Date(row.startTime),
+        endTime: new Date(row.endTime),
+        createdAt: new Date(row.createdAt),
+        updatedAt: new Date(row.updatedAt)
+      };
+    },
+    
     findUnique: async (options) => {
       const row = await this.get('SELECT * FROM bookings WHERE id = ?', [options.where.id]);
       if (!row) return null;
@@ -502,16 +586,64 @@ class Database {
       };
     },
     
+    findFirst: async (options = {}) => {
+      let query = 'SELECT * FROM themes';
+      const params = [];
+      const conditions = [];
+      
+      if (options.where?.id) {
+        conditions.push('id = ?');
+        params.push(options.where.id);
+      }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+      
+      query += ' LIMIT 1';
+      
+      const row = await this.get(query, params);
+      if (!row) return null;
+      
+      return {
+        ...row,
+        createdAt: new Date(row.createdAt),
+        updatedAt: new Date(row.updatedAt)
+      };
+    },
+    
+    upsert: async (options) => {
+      const { where, create, update } = options;
+      
+      // First try to find the record
+      const existing = await this.theme.findUnique({ where });
+      
+      if (existing) {
+        // Update existing record
+        return await this.theme.update({
+          where,
+          data: { ...update, id: where.id }
+        });
+      } else {
+        // Create new record
+        return await this.theme.create({
+          data: { ...create, id: where.id }
+        });
+      }
+    },
+    
     create: async (options) => {
       const { id, createdAt, updatedAt, ...data } = options.data;
       
       const result = await this.run(
-        `INSERT INTO themes (name, primaryColor, secondaryColor, backgroundColor, isActive) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO themes (name, primaryColor, secondaryColor, backgroundColor, paletteIndex, textColorIndex, isActive) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
-          data.name,
+          data.name || 'default',
           data.primaryColor || '#1976d2',
           data.secondaryColor || '#dc004e',
           data.backgroundColor || '#ffffff',
+          data.paletteIndex || 0,
+          data.textColorIndex || 0,
           data.isActive !== undefined ? data.isActive : 1
         ]
       );
@@ -539,6 +671,14 @@ class Database {
       if (data.backgroundColor) {
         setClause.push('backgroundColor = ?');
         params.push(data.backgroundColor);
+      }
+      if (data.paletteIndex !== undefined) {
+        setClause.push('paletteIndex = ?');
+        params.push(data.paletteIndex);
+      }
+      if (data.textColorIndex !== undefined) {
+        setClause.push('textColorIndex = ?');
+        params.push(data.textColorIndex);
       }
       if (data.isActive !== undefined) {
         setClause.push('isActive = ?');

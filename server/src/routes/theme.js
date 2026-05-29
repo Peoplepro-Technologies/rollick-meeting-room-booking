@@ -36,13 +36,13 @@ const authenticateToken = (req, res, next) => {
 // Get theme settings
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const theme = await db.themeSetting.findUnique({
+    const theme = await db.theme.findUnique({
       where: { id: 1 }
     });
 
     // If no theme settings exist, create default
     if (!theme) {
-      const defaultTheme = await db.themeSetting.create({
+      const defaultTheme = await db.theme.create({
         data: {
           id: 1,
           paletteIndex: 0,
@@ -91,7 +91,7 @@ router.put('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const theme = await db.themeSetting.upsert({
+    const theme = await db.theme.upsert({
       where: { id: 1 },
       update: {
         paletteIndex,

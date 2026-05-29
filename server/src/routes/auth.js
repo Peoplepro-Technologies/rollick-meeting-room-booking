@@ -20,9 +20,9 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // Find user
+    // Find user by email (admin login uses email as username)
     const user = await db.user.findUnique({
-      where: { username }
+      where: { email: username }
     });
 
     if (!user) {
@@ -36,7 +36,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -125,6 +125,17 @@ router.post('/login/email', async (req, res) => {
             email: newUser.email,
             role: newUser.role
           }
+        }
+      });
+    }
+
+    // Prevent admin users from using email-only login
+    if (user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'ADMIN_USE_PASSWORD_LOGIN',
+          message: 'Admin users must use password-based login'
         }
       });
     }

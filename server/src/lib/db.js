@@ -369,22 +369,22 @@ class Database {
   // Booking operations
   booking = {
     findMany: async (options = {}) => {
-      let query = 'SELECT * FROM bookings';
+      let query = 'SELECT b.*, u.username as user_username, u.email as user_email, u.role as user_role, r.name as room_name, r.capacity as room_capacity, r.location as room_location, r.description as room_description FROM bookings b LEFT JOIN users u ON b.userId = u.id LEFT JOIN rooms r ON b.roomId = r.id';
       const params = [];
       const conditions = [];
       
       if (options.where?.roomId) {
-        conditions.push('roomId = ?');
+        conditions.push('b.roomId = ?');
         params.push(options.where.roomId);
       }
       
       if (options.where?.userId) {
-        conditions.push('userId = ?');
+        conditions.push('b.userId = ?');
         params.push(options.where.userId);
       }
       
       if (options.where?.startTime?.gte && options.where?.endTime?.lte) {
-        conditions.push('(startTime >= ? AND endTime <= ?)');
+        conditions.push('(b.startTime >= ? AND b.endTime <= ?)');
         params.push(
           new Date(options.where.startTime.gte).toISOString(),
           new Date(options.where.endTime.lte).toISOString()
@@ -401,36 +401,47 @@ class Database {
         startTime: new Date(row.startTime),
         endTime: new Date(row.endTime),
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        user: row.user_username ? {
+          username: row.user_username,
+          email: row.user_email,
+          role: row.user_role
+        } : null,
+        room: row.room_name ? {
+          name: row.room_name,
+          capacity: row.room_capacity,
+          location: row.room_location,
+          description: row.room_description
+        } : null
       }));
     },
     
     findFirst: async (options = {}) => {
-      let query = 'SELECT * FROM bookings';
+      let query = 'SELECT b.*, u.username as user_username, u.email as user_email, u.role as user_role, r.name as room_name, r.capacity as room_capacity, r.location as room_location, r.description as room_description FROM bookings b LEFT JOIN users u ON b.userId = u.id LEFT JOIN rooms r ON b.roomId = r.id';
       const params = [];
       const conditions = [];
       
       if (options.where?.roomId) {
-        conditions.push('roomId = ?');
+        conditions.push('b.roomId = ?');
         params.push(options.where.roomId);
       }
       
       if (options.where?.userId) {
-        conditions.push('userId = ?');
+        conditions.push('b.userId = ?');
         params.push(options.where.userId);
       }
       
       if (options.where?.status) {
-        conditions.push('status = ?');
+        conditions.push('b.status = ?');
         params.push(options.where.status);
       }
       
       if (options.where?.id) {
         if (options.where.id.not !== undefined) {
-          conditions.push('id != ?');
+          conditions.push('b.id != ?');
           params.push(options.where.id.not);
         } else {
-          conditions.push('id = ?');
+          conditions.push('b.id = ?');
           params.push(options.where.id);
         }
       }
@@ -440,21 +451,21 @@ class Database {
         for (const orCondition of options.where.OR) {
           const orClause = [];
           if (orCondition.startTime?.lte && orCondition.startTime?.gte) {
-            orClause.push('(startTime <= ? AND startTime >= ?)');
+            orClause.push('(b.startTime <= ? AND b.startTime >= ?)');
             params.push(
               new Date(orCondition.startTime.lte).toISOString(),
               new Date(orCondition.startTime.gte).toISOString()
             );
           }
           if (orCondition.endTime?.lte && orCondition.endTime?.gte) {
-            orClause.push('(endTime <= ? AND endTime >= ?)');
+            orClause.push('(b.endTime <= ? AND b.endTime >= ?)');
             params.push(
               new Date(orCondition.endTime.lte).toISOString(),
               new Date(orCondition.endTime.gte).toISOString()
             );
           }
           if (orCondition.startTime?.lte && orCondition.endTime?.gte) {
-            orClause.push('(startTime <= ? AND endTime >= ?)');
+            orClause.push('(b.startTime <= ? AND b.endTime >= ?)');
             params.push(
               new Date(orCondition.startTime.lte).toISOString(),
               new Date(orCondition.endTime.gte).toISOString()
@@ -483,12 +494,23 @@ class Database {
         startTime: new Date(row.startTime),
         endTime: new Date(row.endTime),
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        user: row.user_username ? {
+          username: row.user_username,
+          email: row.user_email,
+          role: row.user_role
+        } : null,
+        room: row.room_name ? {
+          name: row.room_name,
+          capacity: row.room_capacity,
+          location: row.room_location,
+          description: row.room_description
+        } : null
       };
     },
     
     findUnique: async (options) => {
-      const row = await this.get('SELECT * FROM bookings WHERE id = ?', [options.where.id]);
+      const row = await this.get('SELECT b.*, u.username as user_username, u.email as user_email, u.role as user_role, r.name as room_name, r.capacity as room_capacity, r.location as room_location, r.description as room_description FROM bookings b LEFT JOIN users u ON b.userId = u.id LEFT JOIN rooms r ON b.roomId = r.id WHERE b.id = ?', [options.where.id]);
       if (!row) return null;
       
       return {
@@ -496,7 +518,18 @@ class Database {
         startTime: new Date(row.startTime),
         endTime: new Date(row.endTime),
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        user: row.user_username ? {
+          username: row.user_username,
+          email: row.user_email,
+          role: row.user_role
+        } : null,
+        room: row.room_name ? {
+          name: row.room_name,
+          capacity: row.room_capacity,
+          location: row.room_location,
+          description: row.room_description
+        } : null
       };
     },
     

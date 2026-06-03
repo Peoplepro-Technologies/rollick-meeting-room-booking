@@ -34,7 +34,7 @@ class Database {
       `CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         username TEXT NOT NULL,
         role TEXT DEFAULT 'user',
         active BOOLEAN DEFAULT 1,
@@ -235,11 +235,11 @@ class Database {
     
     create: async (options) => {
       const { id, createdAt, updatedAt, ...data } = options.data;
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-      
+      const hashedPassword = data.password ? await bcrypt.hash(data.password, 10) : null;
+
       const result = await this.run(
         `INSERT INTO users (email, password, username, role, active) VALUES (?, ?, ?, ?, ?)`,
-        [data.email, hashedPassword, data.username, data.role || 'user', data.active ?? 1]
+        [data.email, hashedPassword || 'no-password', data.username, data.role || 'user', data.active ?? 1]
       );
       
       return this.user.findUnique({ where: { id: result.id } });

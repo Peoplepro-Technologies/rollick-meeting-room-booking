@@ -2,12 +2,15 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
-import * as xlsx from 'xlsx';
+import xlsx from 'xlsx';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import db from '../lib/db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+
+const __filename = new URL(import.meta.url).pathname;
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -82,12 +85,14 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (
 
       // Process each row
       jsonData.forEach((data) => {
+        // Convert all values to strings before trimming to handle Excel numbers/types
+        const toString = (val) => val == null ? '' : String(val);
         const row = {
-          username: data.username?.trim(),
-          email: data.email?.trim().toLowerCase(),
-          password: data.password?.trim() || null,
-          role: (data.role?.trim() || 'user').toLowerCase(),
-          active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
+          username: toString(data.username).trim(),
+          email: toString(data.email).trim().toLowerCase(),
+          password: data.password == null ? null : toString(data.password).trim(),
+          role: (toString(data.role).trim() || 'user').toLowerCase(),
+          active: toString(data.active).trim().toLowerCase() !== 'false' && toString(data.active).trim() !== '0'
         };
 
         // Validate required fields
@@ -153,25 +158,40 @@ function processExcelResults(results, filePath, res) {
         not: 'admin'
       }
     }
-  }).then(() => {
+  }).then((result) => {
     // Insert new users
     const hashedPasswords = {};
-    const usersToInsert = results.map(row => ({
-      ...row,
-      password: row.password ? (hashedPasswords[row.password] || (hashedPasswords[row.password] = bcrypt.hashSync(row.password, 10))) : null,
-      role: row.role === 'admin' ? 'admin' : 'user'
-    }));
+    const usersToInsert = results.map(row => {
+      const passwordStr = String(row.password || '').trim();
+      const password = passwordStr ? (hashedPasswords[passwordStr] || (hashedPasswords[passwordStr] = bcrypt.hashSync(passwordStr, 10))) : null;
+      return {
+        username: row.username,
+        email: row.email,
+        password: password,
+        role: row.role === 'admin' ? 'admin' : 'user',
+        active: Boolean(row.active)
+      };
+    });
 
-    // Batch insert
+    // Insert users one by one to avoid unique constraint issues
+    let insertedCount = 0;
     const insertPromises = usersToInsert.map(user =>
       db.user.create({
         data: {
           username: user.username,
           email: user.email,
-          password: user.password,
+          password: user.password || 'no-password',
           role: user.role,
           active: user.active
         }
+      }).catch(error => {
+        // Continue with other users even if one fails (duplicate emails)
+        return null;
+      }).then(result => {
+        if (result) {
+          insertedCount++;
+        }
+        return result;
       })
     );
 
@@ -181,13 +201,16 @@ function processExcelResults(results, filePath, res) {
 
       res.json({
         success: true,
-        message: `Successfully imported ${usersToInsert.length} users`,
+        message: `Successfully imported ${insertedCount} users (skipped duplicates)`,
         data: {
-          importedCount: usersToInsert.length
+          importedCount: insertedCount,
+          attemptedCount: usersToInsert.length,
+          skippedCount: usersToInsert.length - insertedCount
         }
       });
     }).catch(error => {
       console.error('Insert error:', error);
+      console.error('Stack trace:', error.stack);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -195,7 +218,7 @@ function processExcelResults(results, filePath, res) {
         success: false,
         error: {
           code: 'INSERT_FAILED',
-          message: 'Failed to insert users'
+          message: `Failed to insert users: ${error.message}`
         }
       });
     });

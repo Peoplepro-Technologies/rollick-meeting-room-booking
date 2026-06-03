@@ -28,7 +28,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
-import { Add, Edit, Delete, ArrowBack, Upload, FileUpload, CloudUpload } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowBack, Upload, FileUpload, CloudUpload, Download } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -86,6 +86,7 @@ export const AdminPage: React.FC = () => {
     email: '',
     password: '',
     role: 'user',
+    active: true,
   });
   const [error, setError] = useState('');
   const [themeLoading, setThemeLoading] = useState(false);
@@ -215,10 +216,11 @@ export const AdminPage: React.FC = () => {
         email: u.email,
         password: '',
         role: u.role,
+        active: u.active,
       });
     } else {
       setEditingUser(null);
-      setUserFormData({ username: '', email: '', password: '', role: 'user' });
+      setUserFormData({ username: '', email: '', password: '', role: 'user', active: true });
     }
     setError('');
     setUserDialogOpen(true);
@@ -230,8 +232,11 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleUserInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setUserFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    setUserFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    }));
   };
 
   const handleUserSubmit = async () => {
@@ -251,6 +256,7 @@ export const AdminPage: React.FC = () => {
         username: userFormData.username.trim(),
         email: userFormData.email.trim(),
         role: userFormData.role,
+        active: userFormData.active,
       };
 
       if (userFormData.password) {
@@ -341,6 +347,10 @@ export const AdminPage: React.FC = () => {
         setUploadError('Please upload a CSV or Excel file');
       }
     }
+  };
+
+  const handleDownloadTemplate = () => {
+    window.open('http://localhost:3002/', '_blank');
   };
 
   // ---------- Render ----------
@@ -438,6 +448,14 @@ export const AdminPage: React.FC = () => {
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h4">User Management</Typography>
             <Box display="flex" gap={2}>
+              <Button
+                variant="outlined"
+                startIcon={<Download />}
+                onClick={handleDownloadTemplate}
+                sx={{ mr: 1 }}
+              >
+                Download Template
+              </Button>
               <Button
                 variant="outlined"
                 startIcon={<Upload />}
@@ -786,6 +804,19 @@ export const AdminPage: React.FC = () => {
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </TextField>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <input
+                type="checkbox"
+                id="active"
+                name="active"
+                checked={userFormData.active}
+                onChange={handleUserInputChange}
+                style={{ marginTop: 8 }}
+              />
+              <label htmlFor="active" style={{ marginTop: 8 }}>
+                <Typography variant="body2">Active Account</Typography>
+              </label>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

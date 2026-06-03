@@ -33,6 +33,20 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Active-only middleware
+const requireActive = (req, res, next) => {
+  if (!req.user.active) {
+    return res.status(403).json({
+      success: false,
+      error: {
+        code: 'ACCOUNT_INACTIVE',
+        message: 'Your account has been deactivated. Please contact administrator.'
+      }
+    });
+  }
+  next();
+};
+
 // Admin-only middleware
 const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {

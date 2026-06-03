@@ -19,17 +19,27 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAccountActive, setIsAccountActive] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const response = await apiClient.getCurrentUser();
         if (response.success && response.data?.user) {
-          setUser(response.data.user);
+          const userData = response.data.user;
+          setUser(userData);
+          setIsAccountActive(userData.active);
+
+          if (!userData.active) {
+            // Logout inactive user
+            apiClient.clearToken();
+            setUser(null);
+          }
         }
       } catch (error) {
         // Token is invalid or expired
         apiClient.clearToken();
+        setUser(null);
       } finally {
         setIsLoading(false);
       }

@@ -1,52 +1,152 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import csv from 'csv-parser';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import db from '../lib/db.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Authentication middleware
-const authenticateToken = (req, res, next) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `users-${uniqueSuffix}-${file.originalname}`);
+  }
+});
 
-  if (!token) {
-    return res.status(401).json({
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Upload users from CSV
+router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (req, res) => {
+  // Handle multer errors
+  if (req.fileValidationError) {
+    return res.status(400).json({
       success: false,
       error: {
-        code: 'NO_TOKEN',
-        message: 'No token provided'
+        code: 'INVALID_FILE',
+        message: req.fileValidationError
       }
     });
   }
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({
+  if (!req.file) {
+    return res.status(400).json({
       success: false,
       error: {
-        code: 'INVALID_TOKEN',
-        message: 'Invalid token'
+        code: 'NO_FILE',
+        message: 'No file provided'
       }
     });
   }
-};
 
-// Admin-only middleware
-const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Admin access required'
+  const results = [];
+  const filePath = path.join(__dirname, '../../uploads', req.file.filename);
+
+  // Read and parse CSV
+  fs.createReadStream(filePath)
+    .pipe(csv())
+    .on('data', (data) => {
+      // Process each row
+      const row = {
+        username: data.username?.trim(),
+        email: data.email?.trim().toLowerCase(),
+        password: data.password?.trim() || null,
+        role: (data.role?.trim() || 'user').toLowerCase(),
+        active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
+      };
+
+      // Validate required fields
+      if (row.username && row.email) {
+        results.push(row);
       }
+    })
+    .on('end', async () => {
+      try {
+        // Clear existing users except admin
+        await db.user.deleteMany({
+          where: {
+            role: {
+              not: 'admin'
+            }
+          }
+        });
+
+        // Insert new users
+        const hashedPasswords = {};
+        const usersToInsert = results.map(row => ({
+          ...row,
+          password: row.password ? (hashedPasswords[row.password] || (hashedPasswords[row.password] = bcrypt.hashSync(row.password, 10))) : null,
+          role: row.role === 'admin' ? 'admin' : 'user'
+        }));
+
+        // Batch insert
+        for (const user of usersToInsert) {
+          await db.user.create({
+            data: {
+              username: user.username,
+              email: user.email,
+              password: user.password,
+              role: user.role,
+              active: user.active
+            }
+          });
+        }
+
+        // Clean up uploaded file
+        fs.unlinkSync(filePath);
+
+        res.json({
+          success: true,
+          message: `Successfully imported ${usersToInsert.length} users`,
+          data: {
+            importedCount: usersToInsert.length
+          }
+        });
+      } catch (error) {
+        console.error('CSV import error:', error);
+        res.status(500).json({
+          success: false,
+          error: {
+            code: 'IMPORT_FAILED',
+            message: 'Failed to import users'
+          }
+        });
+      }
+    })
+    .on('error', (error) => {
+      console.error('CSV read error:', error);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'CSV_PARSE_ERROR',
+          message: 'Failed to parse CSV file'
+        }
+      });
     });
-  }
-  next();
-};
+});
 
 // Get all users
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
@@ -58,6 +158,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
         username: true,
         email: true,
         role: true,
+        active: true,
         createdAt: true
       }
     });
@@ -124,13 +225,15 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
           username,
           email: email.toLowerCase(),
           password: passwordHash,
-          role: role || 'user'
+          role: role || 'user',
+          active: true // New users are active by default
         },
         select: {
           id: true,
           username: true,
           email: true,
           role: true,
+          active: true,
           createdAt: true
         }
       });
@@ -169,7 +272,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, active } = req.body;
 
     // Prevent self-modification of role
     if (parseInt(id) === req.user.userId && role !== undefined) {
@@ -196,6 +299,17 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
+    // Prevent self-deactivation
+    if (parseInt(id) === req.user.userId && !active) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You cannot deactivate your own account'
+        }
+      });
+    }
+
     const updateData = {};
     if (username !== undefined) updateData.username = username;
     if (email !== undefined) {
@@ -214,6 +328,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       updateData.passwordHash = await bcrypt.hash(password, 10);
     }
     if (role !== undefined) updateData.role = role;
+    if (active !== undefined) updateData.active = active;
 
     const updatedUser = await db.user.update({
       where: { id: parseInt(id) },
@@ -223,6 +338,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         username: true,
         email: true,
         role: true,
+        active: true,
         createdAt: true
       }
     });
@@ -239,6 +355,66 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         error: {
           code: 'DUPLICATE_USER',
           message: 'Username or email already exists'
+        }
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
+});
+
+// Update user status (active/inactive)
+router.patch('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { active } = req.body;
+
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'Active status must be a boolean value'
+        }
+      });
+    }
+
+    // Prevent self-deactivation
+    if (parseInt(id) === req.user.userId && !active) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You cannot deactivate your own account'
+        }
+      });
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: parseInt(id) },
+      data: { active }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user: updatedUser,
+        message: `User ${active ? 'activated' : 'deactivated'} successfully`
+      }
+    });
+  } catch (error) {
+    console.error('Update user status error:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found'
         }
       });
     }

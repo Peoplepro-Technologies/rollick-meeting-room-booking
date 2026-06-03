@@ -140,6 +140,13 @@ class ApiClient {
     });
   }
 
+  async toggleUserStatus(id: number, active: boolean) {
+    return this.request(`/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    });
+  }
+
   // Booking endpoints
   async getBookings(params?: { room_id?: number; start_date?: string; end_date?: string }): Promise<ApiResponse<{ bookings: any[] }>> {
     const queryParams = new URLSearchParams();

@@ -22,7 +22,7 @@ import {
   Chip,
   Alert,
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowBack } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowBack, Block, Check, Upload } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -32,6 +32,7 @@ interface UserRow {
   username: string;
   email: string;
   role: string;
+  active: boolean;
   created_at: string;
 }
 
@@ -47,8 +48,10 @@ export const UserManagementPage: React.FC = () => {
     email: '',
     password: '',
     role: 'user',
+    active: true,
   });
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -144,6 +147,63 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleToggleStatus = async (userId: number, currentStatus: boolean) => {
+    const action = currentStatus ? 'deactivate' : 'activate';
+    if (window.confirm(`Are you sure you want to ${action} this user?`)) {
+      try {
+        await apiClient.toggleUserStatus(userId, !currentStatus);
+        await fetchUsers();
+      } catch (error) {
+        console.error(`Failed to ${action} user:`, error);
+      }
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      setError('Please upload a CSV file');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/users/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Upload failed');
+      }
+
+      if (data.success) {
+        await fetchUsers();
+        alert(`User list uploaded successfully! ${data.data?.importedCount || ''} users imported.`);
+      } else {
+        throw new Error(data.error?.message || 'Upload failed');
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to upload user list');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
   const handleDelete = async (userId: number, username: string) => {
     if (window.confirm(`Delete user "${username}"? Their bookings will also be removed.`)) {
       try {
@@ -192,13 +252,31 @@ export const UserManagementPage: React.FC = () => {
           <Typography variant="h4">
             User Management
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleDialogOpen()}
-          >
-            Add User
-          </Button>
+          <Box display="flex" gap={2}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<Upload />}
+              disabled={uploading}
+            >
+              {uploading ? 'Uploading...' : 'Upload User List'}
+              <input
+                type="file"
+                accept=".csv"
+                hidden
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleDialogOpen()}
+              disabled={uploading}
+            >
+              Add User
+            </Button>
+          </Box>
         </Box>
 
         <TableContainer component={Paper}>
@@ -209,6 +287,7 @@ export const UserManagementPage: React.FC = () => {
                 <TableCell>Username</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Role</TableCell>
+                <TableCell>Status</TableCell>
                 <TableCell>Created At</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
@@ -227,6 +306,14 @@ export const UserManagementPage: React.FC = () => {
                       variant={u.role === 'admin' ? 'filled' : 'outlined'}
                     />
                   </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={u.active ? 'Active' : 'Inactive'}
+                      size="small"
+                      color={u.active ? 'success' : 'default'}
+                      variant={u.active ? 'filled' : 'outlined'}
+                    />
+                  </TableCell>
                   <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
                   <TableCell align="center">
                     <IconButton
@@ -237,14 +324,25 @@ export const UserManagementPage: React.FC = () => {
                     >
                       <Edit />
                     </IconButton>
-                    <IconButton
-                      color="error"
-                      size="small"
-                      onClick={() => handleDelete(u.id, u.username)}
-                      disabled={u.id === user?.id}
-                    >
-                      <Delete />
-                    </IconButton>
+                    {u.id !== user?.id && (
+                      <>
+                        <IconButton
+                          color={u.active ? "warning" : "success"}
+                          size="small"
+                          onClick={() => handleToggleStatus(u.id, u.active)}
+                          title={u.active ? "Deactivate" : "Activate"}
+                        >
+                          {u.active ? <Block /> : <Check />}
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          size="small"
+                          onClick={() => handleDelete(u.id, u.username)}
+                        >
+                          <Delete />
+                        </IconButton>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

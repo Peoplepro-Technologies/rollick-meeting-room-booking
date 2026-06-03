@@ -33,8 +33,22 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Active-only middleware
+const requireActive = (req, res, next) => {
+  if (!req.user.active) {
+    return res.status(403).json({
+      success: false,
+      error: {
+        code: 'ACCOUNT_INACTIVE',
+        message: 'Your account has been deactivated. Please contact administrator.'
+      }
+    });
+  }
+  next();
+};
+
 // Get all bookings
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requireActive, async (req, res) => {
   try {
     const { room_id, start_date, end_date } = req.query;
 

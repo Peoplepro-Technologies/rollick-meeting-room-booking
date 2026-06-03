@@ -37,6 +37,7 @@ class Database {
         password TEXT NOT NULL,
         username TEXT NOT NULL,
         role TEXT DEFAULT 'user',
+        active BOOLEAN DEFAULT 1,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )`,
@@ -101,7 +102,7 @@ class Database {
 
   async seedDatabase() {
     // Check if admin user exists
-    const adminUser = await this.get('SELECT id FROM users WHERE email = ?', ['admin@meetingroom.com']);
+    const adminUser = await this.get('SELECT id FROM users WHERE email = ?', ['admin@rollick.co.in']);
     
     if (!adminUser) {
       console.log('Seeding database with initial data...');
@@ -193,16 +194,17 @@ class Database {
     findMany: async (options = {}) => {
       let query = 'SELECT * FROM users';
       const params = [];
-      
+
       if (options.orderBy?.username === 'asc') {
         query += ' ORDER BY username ASC';
       }
-      
+
       const rows = await this.all(query, params);
       return rows.map(row => ({
         ...row,
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        active: row.active === 1 || row.active === true
       }));
     },
     
@@ -226,7 +228,8 @@ class Database {
       return {
         ...row,
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        active: row.active === 1 || row.active === true
       };
     },
     
@@ -235,8 +238,8 @@ class Database {
       const hashedPassword = await bcrypt.hash(data.password, 10);
       
       const result = await this.run(
-        `INSERT INTO users (email, password, username, role) VALUES (?, ?, ?, ?)`,
-        [data.email, hashedPassword, data.username, data.role || 'user']
+        `INSERT INTO users (email, password, username, role, active) VALUES (?, ?, ?, ?, ?)`,
+        [data.email, hashedPassword, data.username, data.role || 'user', data.active ?? 1]
       );
       
       return this.user.findUnique({ where: { id: result.id } });
@@ -263,6 +266,10 @@ class Database {
         setClause.push('role = ?');
         params.push(data.role);
       }
+      if (data.active !== undefined) {
+        setClause.push('active = ?');
+        params.push(data.active ? 1 : 0);
+      }
       
       if (setClause.length === 0) {
         return this.user.findUnique({ where: { id: options.where.id } });
@@ -281,6 +288,22 @@ class Database {
     delete: async (options) => {
       const result = await this.run('DELETE FROM users WHERE id = ?', [options.where.id]);
       return result.changes > 0 ? { id: options.where.id } : null;
+    },
+
+    deleteMany: async (options) => {
+      const whereClause = [];
+      const params = [];
+
+      if (options.where?.role) {
+        if (options.where.role.not === 'admin') {
+          whereClause.push('role != ?');
+          params.push('admin');
+        }
+      }
+
+      const query = `DELETE FROM users${whereClause.length > 0 ? ' WHERE ' + whereClause.join(' AND ') : ''}`;
+      const result = await this.run(query, params);
+      return { count: result.changes };
     }
   };
 
@@ -309,7 +332,8 @@ class Database {
       return {
         ...row,
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        active: row.active === 1 || row.active === true
       };
     },
     
@@ -619,7 +643,8 @@ class Database {
       return {
         ...row,
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        active: row.active === 1 || row.active === true
       };
     },
     
@@ -645,7 +670,8 @@ class Database {
       return {
         ...row,
         createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt)
+        updatedAt: new Date(row.updatedAt),
+        active: row.active === 1 || row.active === true
       };
     },
     

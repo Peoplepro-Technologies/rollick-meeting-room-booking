@@ -55,6 +55,17 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Check if user is active
+    if (!user.active) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'ACCOUNT_INACTIVE',
+          message: 'Your account has been deactivated. Please contact administrator.'
+        }
+      });
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, username: user.username, email: user.email, role: user.role },
@@ -147,6 +158,17 @@ router.post('/login/email', async (req, res) => {
       });
     }
 
+    // Check if user is active
+    if (!user.active) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'ACCOUNT_INACTIVE',
+          message: 'Your account has been deactivated. Please contact administrator.'
+        }
+      });
+    }
+
     const token = jwt.sign(
       { userId: user.id, username: user.username, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -200,7 +222,8 @@ router.get('/me', async (req, res) => {
         id: true,
         username: true,
         email: true,
-        role: true
+        role: true,
+        active: true
       }
     });
     

@@ -1,0 +1,5 @@
+username,email,password,role,active
+john,john@example.com,password123,user,true
+jane,jane@example.com,password456,user,true
+manager,manager@example.com,manager123,admin,true
+test,test@example.com,test,user,false

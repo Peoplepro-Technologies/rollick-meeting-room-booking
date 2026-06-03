@@ -68,7 +68,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, username: user.username, email: user.email, role: user.role },
+      { userId: user.id, username: user.username, email: user.email, role: user.role, active: user.active },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -81,7 +81,8 @@ router.post('/login', async (req, res) => {
           id: user.id,
           username: user.username,
           email: user.email,
-          role: user.role
+          role: user.role,
+          active: user.active
         }
       }
     });
@@ -128,7 +129,7 @@ router.post('/login/email', async (req, res) => {
       });
 
       const token = jwt.sign(
-        { userId: newUser.id, username: newUser.username, email: newUser.email, role: newUser.role },
+        { userId: newUser.id, username: newUser.username, email: newUser.email, role: newUser.role, active: newUser.active },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }
       );
@@ -141,7 +142,8 @@ router.post('/login/email', async (req, res) => {
             id: newUser.id,
             username: newUser.username,
             email: newUser.email,
-            role: newUser.role
+            role: newUser.role,
+            active: newUser.active
           }
         }
       });
@@ -183,7 +185,8 @@ router.post('/login/email', async (req, res) => {
           id: user.id,
           username: user.username,
           email: user.email,
-          role: user.role
+          role: user.role,
+          active: user.active
         }
       }
     });

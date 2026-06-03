@@ -3,6 +3,7 @@ export interface User {
   username: string;
   email: string;
   role: 'user' | 'admin';
+  active: boolean;
 }
 
 export interface Room {

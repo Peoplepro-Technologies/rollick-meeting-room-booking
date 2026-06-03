@@ -147,6 +147,29 @@ class ApiClient {
     });
   }
 
+  async uploadUsers(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config: RequestInit = {
+      method: 'POST',
+      body: formData,
+    };
+
+    if (this.token) {
+      config.headers = { Authorization: `Bearer ${this.token}` };
+    }
+
+    const response = await fetch(`${this.baseURL}/users/upload`, config);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Upload failed');
+    }
+
+    return data;
+  }
+
   // Booking endpoints
   async getBookings(params?: { room_id?: number; start_date?: string; end_date?: string }): Promise<ApiResponse<{ bookings: any[] }>> {
     const queryParams = new URLSearchParams();

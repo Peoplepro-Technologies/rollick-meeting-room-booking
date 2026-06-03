@@ -1,0 +1,13 @@
+This is a binary file. Please generate an actual Excel file with the following structure:
+
+Columns needed:
+- username (required)
+- email (required)
+- password (optional, for admin users)
+- role (optional: 'user' or 'admin')
+- active (optional: true/false, defaults to true)
+
+Example row:
+john.doe, john@example.com, password123, admin, true
+
+Note: The Excel file should be saved in .xlsx format.

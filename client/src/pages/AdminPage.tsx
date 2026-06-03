@@ -28,7 +28,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
-import { Add, Edit, Delete, ArrowBack } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowBack, Upload, FileUpload, CloudUpload } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -60,6 +60,7 @@ interface UserRow {
   username: string;
   email: string;
   role: string;
+  active: boolean;
   created_at: string;
 }
 
@@ -101,6 +102,14 @@ export const AdminPage: React.FC = () => {
   ];
 
   const TEXT_COLORS = ['#2B2B2B', '#4A4A4A', '#5C3D4D'];
+
+  // State for file upload
+  const [fileUploadDialogOpen, setFileUploadDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -289,6 +298,51 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const handleFileUpload = async () => {
+    if (!uploadFile) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadError('');
+    setUploadMessage('');
+
+    try {
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      // Upload the file
+      await apiClient.uploadUsers(uploadFile);
+
+      setUploadMessage('File uploaded successfully!');
+      setTimeout(() => {
+        setFileUploadDialogOpen(false);
+        setUploadMessage('');
+        fetchData();
+      }, 2000);
+    } catch (err: any) {
+      setUploadError(err.message || 'Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file type
+      if (file.type === 'text/csv' ||
+          file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+          file.name.endsWith('.csv') ||
+          file.name.endsWith('.xlsx')) {
+        setUploadFile(file);
+        setUploadError('');
+      } else {
+        setUploadError('Please upload a CSV or Excel file');
+      }
+    }
+  };
+
   // ---------- Render ----------
   if (loading) {
     return (
@@ -383,13 +437,22 @@ export const AdminPage: React.FC = () => {
         <TabPanel value={tabValue} index={1}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h4">User Management</Typography>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => handleUserDialogOpen()}
-            >
-              Add User
-            </Button>
+            <Box display="flex" gap={2}>
+              <Button
+                variant="outlined"
+                startIcon={<Upload />}
+                onClick={() => setFileUploadDialogOpen(true)}
+              >
+                Upload Users
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => handleUserDialogOpen()}
+              >
+                Add User
+              </Button>
+            </Box>
           </Box>
 
           <TableContainer component={Paper}>
@@ -400,6 +463,7 @@ export const AdminPage: React.FC = () => {
                   <TableCell>Username</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Role</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell>Created At</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
@@ -416,6 +480,14 @@ export const AdminPage: React.FC = () => {
                         size="small"
                         color={u.role === 'admin' ? 'secondary' : 'default'}
                         variant={u.role === 'admin' ? 'filled' : 'outlined'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={u.active ? 'Active' : 'Inactive'}
+                        size="small"
+                        color={u.active ? 'success' : 'error'}
+                        variant="outlined"
                       />
                     </TableCell>
                     <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
@@ -720,6 +792,82 @@ export const AdminPage: React.FC = () => {
           <Button onClick={handleUserDialogClose}>Cancel</Button>
           <Button type="submit" variant="contained">
             {editingUser ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ──── File Upload Dialog ──── */}
+      <Dialog
+        open={fileUploadDialogOpen}
+        onClose={() => {
+          setFileUploadDialogOpen(false);
+          setUploadFile(null);
+          setUploadError('');
+          setUploadMessage('');
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Upload User List</DialogTitle>
+        <DialogContent>
+          {uploadError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError('')}>
+              {uploadError}
+            </Alert>
+          )}
+          {uploadMessage && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUploadMessage('')}>
+              {uploadMessage}
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <Box sx={{ border: '2px dashed #ccc', borderRadius: 2, p: 3, textAlign: 'center' }}>
+              <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Upload a CSV or Excel file containing user list
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                Expected columns: username, email, password (optional), role (optional), active (optional)
+              </Typography>
+              <Button
+                variant="outlined"
+                component="label"
+                disabled={uploading}
+              >
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input
+                  type="file"
+                  hidden
+                  accept=".csv,.xlsx"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                />
+              </Button>
+              {uploadFile && (
+                <Typography variant="body2" sx={{ mt: 2 }}>
+                  Selected: {uploadFile.name}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setFileUploadDialogOpen(false);
+            setUploadFile(null);
+            setUploadError('');
+            setUploadMessage('');
+          }} disabled={uploading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleFileUpload}
+            variant="contained"
+            disabled={!uploadFile || uploading}
+            startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : <CloudUpload />}
+          >
+            {uploading ? 'Uploading...' : 'Upload'}
           </Button>
         </DialogActions>
       </Dialog>

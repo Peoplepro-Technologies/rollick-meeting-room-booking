@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { Logout } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { RoomTabs } from '../components/RoomTabs/RoomTabs';
 import { Calendar } from '../components/Calendar/Calendar';
 import { apiClient } from '../api/client';
@@ -17,11 +18,38 @@ import { useTheme } from '../hooks/useTheme';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
   const { palette, textColor } = useTheme();
+
+  const fetchData = async () => {
+    try {
+      const [roomsResponse, bookingsResponse] = await Promise.all([
+        apiClient.getRooms(),
+        apiClient.getBookings(),
+      ]);
+
+      if (roomsResponse.success && roomsResponse.data?.rooms) {
+        setRooms(roomsResponse.data.rooms);
+      }
+
+      if (bookingsResponse.success && bookingsResponse.data?.bookings) {
+        setBookings(bookingsResponse.data.bookings);
+      }
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [location.pathname]); // Refetch when the route changes (e.g., returning from admin)
 
   const roomColors = useMemo(() => {
     const colorMap = new Map<number, string>();
@@ -43,31 +71,6 @@ export const DashboardPage: React.FC = () => {
     });
     return colorMap;
   }, [bookings, rooms, palette]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [roomsResponse, bookingsResponse] = await Promise.all([
-          apiClient.getRooms(),
-          apiClient.getBookings(),
-        ]);
-
-        if (roomsResponse.success && roomsResponse.data?.rooms) {
-          setRooms(roomsResponse.data.rooms);
-        }
-
-        if (bookingsResponse.success && bookingsResponse.data?.bookings) {
-          setBookings(bookingsResponse.data.bookings);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
 
   const handleBookingCreated = (newBooking: any) => {
     setBookings(prev => [...prev, newBooking]);

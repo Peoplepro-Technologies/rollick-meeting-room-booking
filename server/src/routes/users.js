@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
+import * as xlsx from 'xlsx';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
@@ -28,10 +29,12 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv') ||
+        file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.originalname.endsWith('.xlsx')) {
       cb(null, true);
     } else {
-      cb(new Error('Only CSV files are allowed'), false);
+      cb(new Error('Only CSV or Excel files are allowed'), false);
     }
   },
   limits: {
@@ -39,7 +42,7 @@ const upload = multer({
   }
 });
 
-// Upload users from CSV
+// Upload users from CSV or Excel
 router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (req, res) => {
   // Handle multer errors
   if (req.fileValidationError) {
@@ -65,88 +68,151 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (
   const results = [];
   const filePath = path.join(__dirname, '../../uploads', req.file.filename);
 
-  // Read and parse CSV
-  fs.createReadStream(filePath)
-    .pipe(csv())
-    .on('data', (data) => {
+  // Read and parse file based on extension
+  const fileExt = path.extname(filePath).toLowerCase();
+  const isExcel = fileExt === '.xlsx' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  if (isExcel) {
+    // Parse Excel file
+    try {
+      const workbook = xlsx.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = xlsx.utils.sheet_to_json(worksheet);
+
       // Process each row
-      const row = {
-        username: data.username?.trim(),
-        email: data.email?.trim().toLowerCase(),
-        password: data.password?.trim() || null,
-        role: (data.role?.trim() || 'user').toLowerCase(),
-        active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
-      };
+      jsonData.forEach((data) => {
+        const row = {
+          username: data.username?.trim(),
+          email: data.email?.trim().toLowerCase(),
+          password: data.password?.trim() || null,
+          role: (data.role?.trim() || 'user').toLowerCase(),
+          active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
+        };
 
-      // Validate required fields
-      if (row.username && row.email) {
-        results.push(row);
-      }
-    })
-    .on('end', async () => {
-      try {
-        // Clear existing users except admin
-        await db.user.deleteMany({
-          where: {
-            role: {
-              not: 'admin'
-            }
-          }
-        });
-
-        // Insert new users
-        const hashedPasswords = {};
-        const usersToInsert = results.map(row => ({
-          ...row,
-          password: row.password ? (hashedPasswords[row.password] || (hashedPasswords[row.password] = bcrypt.hashSync(row.password, 10))) : null,
-          role: row.role === 'admin' ? 'admin' : 'user'
-        }));
-
-        // Batch insert
-        for (const user of usersToInsert) {
-          await db.user.create({
-            data: {
-              username: user.username,
-              email: user.email,
-              password: user.password,
-              role: user.role,
-              active: user.active
-            }
-          });
+        // Validate required fields
+        if (row.username && row.email) {
+          results.push(row);
         }
+      });
 
-        // Clean up uploaded file
-        fs.unlinkSync(filePath);
-
-        res.json({
-          success: true,
-          message: `Successfully imported ${usersToInsert.length} users`,
-          data: {
-            importedCount: usersToInsert.length
-          }
-        });
-      } catch (error) {
-        console.error('CSV import error:', error);
-        res.status(500).json({
-          success: false,
-          error: {
-            code: 'IMPORT_FAILED',
-            message: 'Failed to import users'
-          }
-        });
-      }
-    })
-    .on('error', (error) => {
-      console.error('CSV read error:', error);
+      // Process results for Excel
+      processExcelResults(results, filePath, res);
+    } catch (error) {
+      console.error('Excel parse error:', error);
+      fs.unlinkSync(filePath);
       res.status(500).json({
         success: false,
         error: {
-          code: 'CSV_PARSE_ERROR',
-          message: 'Failed to parse CSV file'
+          code: 'EXCEL_PARSE_ERROR',
+          message: 'Failed to parse Excel file'
+        }
+      });
+    }
+  } else {
+    // Parse CSV file
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (data) => {
+        // Process each row
+        const row = {
+          username: data.username?.trim(),
+          email: data.email?.trim().toLowerCase(),
+          password: data.password?.trim() || null,
+          role: (data.role?.trim() || 'user').toLowerCase(),
+          active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
+        };
+
+        // Validate required fields
+        if (row.username && row.email) {
+          results.push(row);
+        }
+      })
+      .on('end', () => processExcelResults(results, filePath, res))
+      .on('error', (error) => {
+        console.error('CSV read error:', error);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        res.status(500).json({
+          success: false,
+          error: {
+            code: 'CSV_PARSE_ERROR',
+            message: 'Failed to parse CSV file'
+          }
+        });
+      });
+  }
+});
+
+function processExcelResults(results, filePath, res) {
+  // Clear existing users except admin
+  db.user.deleteMany({
+    where: {
+      role: {
+        not: 'admin'
+      }
+    }
+  }).then(() => {
+    // Insert new users
+    const hashedPasswords = {};
+    const usersToInsert = results.map(row => ({
+      ...row,
+      password: row.password ? (hashedPasswords[row.password] || (hashedPasswords[row.password] = bcrypt.hashSync(row.password, 10))) : null,
+      role: row.role === 'admin' ? 'admin' : 'user'
+    }));
+
+    // Batch insert
+    const insertPromises = usersToInsert.map(user =>
+      db.user.create({
+        data: {
+          username: user.username,
+          email: user.email,
+          password: user.password,
+          role: user.role,
+          active: user.active
+        }
+      })
+    );
+
+    Promise.all(insertPromises).then(() => {
+      // Clean up uploaded file
+      fs.unlinkSync(filePath);
+
+      res.json({
+        success: true,
+        message: `Successfully imported ${usersToInsert.length} users`,
+        data: {
+          importedCount: usersToInsert.length
+        }
+      });
+    }).catch(error => {
+      console.error('Insert error:', error);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INSERT_FAILED',
+          message: 'Failed to insert users'
         }
       });
     });
-});
+  }).catch(error => {
+    console.error('Delete error:', error);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'DELETE_FAILED',
+        message: 'Failed to delete existing users'
+      }
+    });
+  });
+}
 
 // Get all users
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {

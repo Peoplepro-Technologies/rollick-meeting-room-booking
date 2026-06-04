@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import requireActive from '../middleware/requireActive.js';
 import db from '../lib/db.js';
 
 const router = express.Router();
@@ -34,18 +35,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Active-only middleware
-const requireActive = (req, res, next) => {
-  if (!req.user.active) {
-    return res.status(403).json({
-      success: false,
-      error: {
-        code: 'ACCOUNT_INACTIVE',
-        message: 'Your account has been deactivated. Please contact administrator.'
-      }
-    });
-  }
-  next();
-};
+// (now imported from ../middleware/requireActive.js to validate against DB)
 
 // Get all bookings
 router.get('/', authenticateToken, requireActive, async (req, res) => {

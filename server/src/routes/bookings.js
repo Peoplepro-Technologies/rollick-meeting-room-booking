@@ -232,9 +232,6 @@ router.post('/', authenticateToken, async (req, res) => {
       where: {
         roomId: parseInt(room_id),
         status: 'confirmed',
-        id: {
-          not: req.body.id ? parseInt(req.body.id) : undefined
-        },
         OR: [
           {
             startTime: {

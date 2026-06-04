@@ -1,0 +1,4 @@
+username,email,password,role
+john.doe,john.doe@example.com,password123,user
+jane.smith,jane.smith@example.com,password123,user
+bob.wilson,bob.wilson@example.com,password123,user

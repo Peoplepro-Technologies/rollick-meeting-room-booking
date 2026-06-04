@@ -350,7 +350,8 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    window.open('http://localhost:3002/', '_blank');
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    window.open(`${apiUrl}/users/template`, '_blank');
   };
 
   // ---------- Render ----------

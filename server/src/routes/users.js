@@ -561,4 +561,24 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Download user template
+router.get('/template', (req, res) => {
+  const templatePath = path.join(__dirname, '../../sample-users.csv');
+
+  if (fs.existsSync(templatePath)) {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="user-template.csv"');
+    const fileStream = fs.createReadStream(templatePath);
+    fileStream.pipe(res);
+  } else {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: 'TEMPLATE_NOT_FOUND',
+        message: 'Template file not found'
+      }
+    });
+  }
+});
+
 export default router;

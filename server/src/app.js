@@ -49,6 +49,10 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // API routes
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'meeting-room-booking' });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/users', userRoutes);

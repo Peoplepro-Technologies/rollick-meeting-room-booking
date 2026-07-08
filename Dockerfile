@@ -21,28 +21,30 @@ FROM node:20-alpine AS runtime
 
 ENV NODE_ENV=production \
     PORT=5000 \
-    DATABASE_PATH=/data/database.sqlite \
+    DATABASE_URL=/data/database.sqlite \
     UPLOADS_DIR=/data/uploads
 
 WORKDIR /app
 
-# Install runtime tools, plus build deps to compile sqlite3 from source
+# Runtime tools + native build deps to compile sqlite3 against musl
 RUN apk add --no-cache curl python3 py3-setuptools make g++ \
     && addgroup -S app && adduser -S app -G app
 
-# Copy server with deps and rebuild sqlite3 against this Node ABI/musl libc
+# Copy server with deps and rebuild sqlite3 for this Node ABI / musl libc
 COPY --from=builder /app/server ./server
 RUN cd /app/server && npm rebuild sqlite3 --build-from-source
 COPY --from=builder /app/client/dist ./client/dist
 
-# Persistent storage directory
+# Persistent storage directory (created on first run by the entrypoint)
 RUN mkdir -p /data && chown -R app:app /data
 
-# Copy entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
+# Make the app tree readable/writable by the non-root user, then drop privs
+RUN chown -R app:app /app
 USER app
+
+# Entrypoint: prepares /data, seeds the DB if missing, then execs the server
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

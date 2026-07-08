@@ -6,6 +6,10 @@ export interface ThemeSettings {
   text_color_index: number;
 }
 
+// Dispatched after a successful theme save so other mounted pages
+// (e.g. the dashboard) can re-fetch and apply the new palette/colors.
+export const THEME_CHANGED_EVENT = 'theme:changed';
+
 const PALETTES: string[][] = [
   ['#ABDEE6', '#CBAACB', '#FFFFB5', '#FFCCB6', '#F3B0C3'],
   ['#C6DBDA', '#FEE1E8', '#FED7C3', '#F6EAC2', '#ECD5E3'],
@@ -36,6 +40,7 @@ interface UseThemeReturn {
   palette: string[];
   textColor: string;
   loading: boolean;
+  refresh: () => Promise<void>;
 }
 
 export function useTheme(): UseThemeReturn {
@@ -46,9 +51,10 @@ export function useTheme(): UseThemeReturn {
   const fetchTheme = useCallback(async () => {
     try {
       const res = await apiClient.getTheme();
-      if (res.success && res.data) {
-        setPalette(PALETTES[res.data.palette_index] || PALETTES[0]);
-        setTextColor(TEXT_COLORS[res.data.text_color_index] || TEXT_COLORS[0]);
+      const theme = res.success ? res.data?.theme : null;
+      if (theme) {
+        setPalette(PALETTES[theme.paletteIndex] || PALETTES[0]);
+        setTextColor(TEXT_COLORS[theme.textColorIndex] || TEXT_COLORS[0]);
       }
     } catch {
       // keep defaults
@@ -59,7 +65,11 @@ export function useTheme(): UseThemeReturn {
 
   useEffect(() => {
     fetchTheme();
+
+    const onThemeChanged = () => { fetchTheme(); };
+    window.addEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
   }, [fetchTheme]);
 
-  return { palette, textColor, loading };
+  return { palette, textColor, loading, refresh: fetchTheme };
 }

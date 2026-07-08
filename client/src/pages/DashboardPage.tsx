@@ -107,6 +107,12 @@ export const DashboardPage: React.FC = () => {
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
         <Toolbar>
+          <Box
+            component="img"
+            src="/logo.png"
+            alt="Rollick"
+            sx={{ height: 40, mr: 2 }}
+          />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Meeting Room Booking
           </Typography>

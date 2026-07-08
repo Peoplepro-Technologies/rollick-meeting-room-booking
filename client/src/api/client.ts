@@ -214,14 +214,14 @@ class ApiClient {
   }
 
   // Theme endpoints
-  async getTheme(): Promise<ApiResponse<{ palette_index: number; text_color_index: number }>> {
+  async getTheme(): Promise<ApiResponse<{ theme: { paletteIndex: number; textColorIndex: number } }>> {
     return this.request('/theme');
   }
 
-  async updateTheme(paletteIndex: number, textColorIndex: number): Promise<ApiResponse<{ palette_index: number; text_color_index: number }>> {
+  async updateTheme(paletteIndex: number, textColorIndex: number): Promise<ApiResponse<{ theme: { paletteIndex: number; textColorIndex: number } }>> {
     return this.request('/theme', {
-      method: 'POST',
-      body: JSON.stringify({ palette_index: paletteIndex, text_color_index: textColorIndex }),
+      method: 'PUT',
+      body: JSON.stringify({ paletteIndex, textColorIndex }),
     });
   }
 }

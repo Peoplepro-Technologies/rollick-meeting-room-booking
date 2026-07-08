@@ -6,7 +6,8 @@
 
 # Development scripts
 start-dev.sh
-*.sh
+# Ship the deployment entrypoint alongside the app
+!docker-entrypoint.sh
 
 # Dependencies
 node_modules/

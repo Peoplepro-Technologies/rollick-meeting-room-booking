@@ -85,6 +85,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
+    room_id: 0,
     start: new Date(),
     end: new Date(Date.now() + 60 * 60 * 1000),
   });
@@ -93,6 +94,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [editFormData, setEditFormData] = useState({
     title: '',
+    room_id: 0,
     start: new Date(),
     end: new Date(),
   });
@@ -129,11 +131,12 @@ export const Calendar: React.FC<CalendarProps> = ({
     setSelectedInfo(selectInfo);
     setFormData({
       title: '',
+      room_id: roomId ?? (rooms && rooms.length > 0 ? rooms[0].id : 0),
       start: startDate,
       end: finalEndDate,
     });
     setDialogOpen(true);
-  }, [constrainToWorkingHours]);
+  }, [constrainToWorkingHours, roomId, rooms]);
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     const booking = clickInfo.event.extendedProps.booking;
@@ -148,6 +151,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     setEditingBooking(booking);
     setEditFormData({
       title: booking.title,
+      room_id: booking.room_id,
       start: new Date(booking.start_time),
       end: new Date(booking.end_time),
     });
@@ -155,7 +159,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     setEditDialogOpen(true);
   };
 
-  const handleChange = (field: 'title' | 'start' | 'end', value: any) => {
+  const handleChange = (field: 'title' | 'room_id' | 'start' | 'end', value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
@@ -168,6 +172,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     setSelectedInfo(null);
     setFormData({
       title: '',
+      room_id: 0,
       start: new Date(),
       end: new Date(Date.now() + 60 * 60 * 1000),
     });
@@ -179,13 +184,14 @@ export const Calendar: React.FC<CalendarProps> = ({
     setEditingBooking(null);
     setEditFormData({
       title: '',
+      room_id: 0,
       start: new Date(),
       end: new Date(),
     });
     setEditError(null);
   };
 
-  const handleEditChange = (field: 'title' | 'start' | 'end', value: any) => {
+  const handleEditChange = (field: 'title' | 'room_id' | 'start' | 'end', value: any) => {
     setEditFormData(prev => ({
       ...prev,
       [field]: value,
@@ -203,6 +209,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     try {
       updateResponse = await apiClient.updateBooking(editingBooking.id, {
         title: editFormData.title,
+        room_id: editFormData.room_id,
         start_time: editFormData.start.toISOString(),
         end_time: editFormData.end.toISOString(),
       });
@@ -214,14 +221,14 @@ export const Calendar: React.FC<CalendarProps> = ({
 
     const updatedBooking: Booking = {
       id: editingBooking.id,
-      room_id: editingBooking.room_id,
+      room_id: updateResponse.data.booking.room_id,
       user_id: editingBooking.user_id,
       title: updateResponse.data.booking.title,
       start_time: updateResponse.data.booking.start_time,
       end_time: updateResponse.data.booking.end_time,
       status: updateResponse.data.booking.status,
       username: editingBooking.username,
-      room_name: editingBooking.room_name,
+      room_name: updateResponse.data.booking.room_name,
     };
 
     onBookingUpdate(updatedBooking);
@@ -247,11 +254,12 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!roomId) {
-      setRoomDialogOpen(true);
+    const targetRoomId = formData.room_id || roomId;
+    if (!targetRoomId) {
+      setError('Please select a room');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
 
@@ -266,7 +274,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           title: formData.title,
           start_time: formData.start.toISOString(),
           end_time: formData.end.toISOString(),
-          room_id: roomId,
+          room_id: targetRoomId,
         }),
       });
 
@@ -301,6 +309,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     setSelectedInfo(null);
     setFormData({
       title: '',
+      room_id: roomId ?? (rooms && rooms.length > 0 ? rooms[0].id : 0),
       start: defaultStart,
       end: defaultEnd,
     });
@@ -524,7 +533,7 @@ selectMirror={true}
                 {error}
               </Alert>
             )}
-            
+
             <TextField
               label="Meeting Title"
               value={formData.title}
@@ -532,6 +541,21 @@ selectMirror={true}
               required
               fullWidth
             />
+
+            <TextField
+              select
+              label="Meeting Room"
+              value={formData.room_id || ''}
+              onChange={(e) => handleChange('room_id', Number(e.target.value))}
+              required
+              fullWidth
+            >
+              {rooms && rooms.map((room) => (
+                <MenuItem key={room.id} value={room.id}>
+                  {room.name} (Capacity: {room.capacity})
+                </MenuItem>
+              ))}
+            </TextField>
 
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <DateTimePicker
@@ -563,7 +587,7 @@ selectMirror={true}
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={loading || !formData.title.trim()}
+            disabled={loading || !formData.title.trim() || !formData.room_id}
           >
             {loading ? <CircularProgress size={24} /> : 'Create Booking'}
           </Button>
@@ -587,6 +611,21 @@ selectMirror={true}
               required
               fullWidth
             />
+
+            <TextField
+              select
+              label="Meeting Room"
+              value={editFormData.room_id || ''}
+              onChange={(e) => handleEditChange('room_id', Number(e.target.value))}
+              required
+              fullWidth
+            >
+              {rooms && rooms.map((room) => (
+                <MenuItem key={room.id} value={room.id}>
+                  {room.name} (Capacity: {room.capacity})
+                </MenuItem>
+              ))}
+            </TextField>
 
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <DateTimePicker

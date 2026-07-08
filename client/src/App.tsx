@@ -10,10 +10,10 @@ import { AdminPage } from './pages/AdminPage';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
+      main: '#EB1170',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#EB1170',
     },
   },
 });

@@ -19,6 +19,7 @@ debug-logs.txt
 .vscode
 .idea
 *.md
+!README.md
 !client/README.md
 !server/README.md
 uploads/
@@ -39,3 +40,5 @@ server/database (Copy 2).sqlite
 server/fix-password-null.mjs
 server/test-upload-server.log
 server/test-xlsx.js
+# Explicitly ship the deployment entrypoint
+!docker-entrypoint.sh

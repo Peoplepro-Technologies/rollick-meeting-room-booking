@@ -32,6 +32,7 @@ import { Add, Edit, Delete, ArrowBack, Upload, FileUpload, CloudUpload, Download
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
+import { THEME_CHANGED_EVENT } from '../hooks/useTheme';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -119,9 +120,10 @@ export const AdminPage: React.FC = () => {
   const fetchTheme = useCallback(async () => {
     try {
       const res = await apiClient.getTheme();
-      if (res.success && res.data) {
-        setPaletteIndex(res.data.palette_index);
-        setTextColorIndex(res.data.text_color_index);
+      const theme = res.success ? res.data?.theme : null;
+      if (theme) {
+        setPaletteIndex(theme.paletteIndex ?? 0);
+        setTextColorIndex(theme.textColorIndex ?? 0);
       }
     } catch (err) {
       console.error('Failed to fetch theme:', err);
@@ -295,6 +297,7 @@ export const AdminPage: React.FC = () => {
     setThemeLoading(true);
     try {
       await apiClient.updateTheme(paletteIndex, textColorIndex);
+      window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
       setThemeSaved(true);
       setTimeout(() => setThemeSaved(false), 3000);
     } catch (err: any) {
@@ -367,6 +370,12 @@ export const AdminPage: React.FC = () => {
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
         <Toolbar>
+          <Box
+            component="img"
+            src="/logo.png"
+            alt="Rollick"
+            sx={{ height: 40, mr: 2 }}
+          />
           <Button
             color="inherit"
             startIcon={<ArrowBack />}
@@ -611,12 +620,12 @@ export const AdminPage: React.FC = () => {
                       cursor: 'pointer',
                       p: 1,
                       borderRadius: 2,
-                      border: textColorIndex === idx ? '2px solid #1976d2' : '2px solid transparent',
-                      bgcolor: textColorIndex === idx ? 'rgba(25,118,210,0.06)' : 'transparent',
+                      border: textColorIndex === idx ? '2px solid #EB1170' : '2px solid transparent',
+                      bgcolor: textColorIndex === idx ? 'rgba(235,17,112,0.06)' : 'transparent',
                       transition: 'all 0.2s',
                       '&:hover': {
-                        borderColor: '#90caf9',
-                        bgcolor: 'rgba(25,118,210,0.04)',
+                        borderColor: '#f48fb1',
+                        bgcolor: 'rgba(235,17,112,0.04)',
                       },
                     }}
                   >

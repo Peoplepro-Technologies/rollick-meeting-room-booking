@@ -25,21 +25,40 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // CORS configuration
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const ALLOWED_LAN_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no Origin header (curl, server-to-server, same-origin)
     if (!origin) return callback(null, true);
-    
+
     // Allow all origins in development
     if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
-    
-    // In production, only allow the configured frontend URL
-    if (origin === process.env.FRONTEND_URL) {
-      return callback(null, true);
+
+    // In production, accept requests from:
+    //   1. The configured FRONTEND_URL (exact match)
+    //   2. Same-host origins (e.g. http://<lan-ip>:5000 when served by this container)
+    //   3. Any extra origins listed in CORS_ALLOWED_ORIGINS (comma-separated)
+    if (FRONTEND_URL && origin === FRONTEND_URL) return callback(null, true);
+    if (ALLOWED_LAN_ORIGINS.includes(origin)) return callback(null, true);
+
+    try {
+      const reqUrl = new URL(origin);
+      const forwardedHost = req.headers?.host; // only used when present
+      // Same-host: origin's host matches the request's Host header
+      if (forwardedHost && reqUrl.host === forwardedHost) {
+        return callback(null, true);
+      }
+    } catch {
+      // ignore parse errors
     }
-    
+
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true

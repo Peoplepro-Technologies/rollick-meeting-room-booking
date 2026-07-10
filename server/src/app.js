@@ -33,7 +33,7 @@ const ALLOWED_LAN_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no Origin header (curl, server-to-server, same-origin)
+    // Allow requests with no Origin header (curl, server-to-server, same-origin GETs)
     if (!origin) return callback(null, true);
 
     // Allow all origins in development
@@ -43,27 +43,64 @@ const corsOptions = {
 
     // In production, accept requests from:
     //   1. The configured FRONTEND_URL (exact match)
-    //   2. Same-host origins (e.g. http://<lan-ip>:5000 when served by this container)
-    //   3. Any extra origins listed in CORS_ALLOWED_ORIGINS (comma-separated)
+    //   2. Any origin listed in CORS_ALLOWED_ORIGINS (comma-separated)
+    // Same-host origins are handled by allowSameHost() below — it needs
+    // req.headers.host, which the cors library does NOT expose to its
+    // origin callback. So we wire the same-host check in as a middleware
+    // that runs *before* this cors() call.
     if (FRONTEND_URL && origin === FRONTEND_URL) return callback(null, true);
     if (ALLOWED_LAN_ORIGINS.includes(origin)) return callback(null, true);
-
-    try {
-      const reqUrl = new URL(origin);
-      const forwardedHost = req.headers?.host; // only used when present
-      // Same-host: origin's host matches the request's Host header
-      if (forwardedHost && reqUrl.host === forwardedHost) {
-        return callback(null, true);
-      }
-    } catch {
-      // ignore parse errors
-    }
 
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 };
 
+// Permits origins whose host:port matches the request's Host header.
+// This is the typical "browser opens the SPA at http://<lan-ip>:5000" case
+// where the API and the SPA are served from the same process.
+//
+// The cors middleware that runs immediately after this does NOT expose
+// `req.headers.host` to its origin callback, so we resolve same-host
+// matches here, set the CORS response headers ourselves, and strip the
+// Origin header from the request so cors()'s "no origin" branch lets
+// the request through instead of rejecting it.
+function allowSameHost(req, res, next) {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+
+  let reqUrl;
+  try {
+    reqUrl = new URL(origin);
+  } catch {
+    return next();
+  }
+
+  const hostHeader = req.headers.host;
+  if (!hostHeader || reqUrl.host !== hostHeader) {
+    return next(); // not same-host — let cors() decide
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    const reqHeaders = req.headers['access-control-request-headers'];
+    const reqMethod = req.headers['access-control-request-method'];
+    if (reqMethod) res.setHeader('Access-Control-Allow-Methods', reqMethod);
+    if (reqHeaders) res.setHeader('Access-Control-Allow-Headers', reqHeaders);
+    return res.status(204).end();
+  }
+
+  // Same-host actual request: hand off to the next middleware but trick
+  // the cors() that follows into treating this as a no-origin (same-origin)
+  // request, so its allowlist check is bypassed.
+  delete req.headers.origin;
+  return next();
+}
+
+app.use(allowSameHost);
 app.use(cors(corsOptions));
 app.use(express.json());
 

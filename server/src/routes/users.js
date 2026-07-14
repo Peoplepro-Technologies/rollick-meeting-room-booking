@@ -89,12 +89,14 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (
       jsonData.forEach((data) => {
         // Convert all values to strings before trimming to handle Excel numbers/types
         const toString = (val) => val == null ? '' : String(val);
+        // Accept either 'Status' (template) or 'active' for backward compat
+        const statusRaw = toString(data.Status ?? data.active).trim().toLowerCase();
         const row = {
           username: toString(data.username).trim(),
           email: toString(data.email).trim().toLowerCase(),
           password: data.password == null ? null : toString(data.password).trim(),
           role: (toString(data.role).trim() || 'user').toLowerCase(),
-          active: toString(data.active).trim().toLowerCase() !== 'false' && toString(data.active).trim() !== '0'
+          active: statusRaw !== 'false' && statusRaw !== '0' && statusRaw !== ''
         };
 
         // Validate required fields
@@ -122,12 +124,14 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (
       .pipe(csv())
       .on('data', (data) => {
         // Process each row
+        // Accept either 'Status' (template) or 'active' for backward compat
+        const statusRaw = (data.Status ?? data.active)?.trim().toLowerCase();
         const row = {
           username: data.username?.trim(),
           email: data.email?.trim().toLowerCase(),
           password: data.password?.trim() || null,
           role: (data.role?.trim() || 'user').toLowerCase(),
-          active: data.active?.trim().toLowerCase() !== 'false' && data.active?.trim() !== '0'
+          active: statusRaw !== 'false' && statusRaw !== '0'
         };
 
         // Validate required fields

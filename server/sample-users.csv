@@ -1,4 +1,5 @@
-username,email,password,role
-john.doe,john.doe@example.com,password123,user
-jane.smith,jane.smith@example.com,password123,user
-bob.wilson,bob.wilson@example.com,password123,user
+username,email,password,role,Status
+john.doe,john.doe@example.com,password123,user,true
+jane.smith,jane.smith@example.com,password123,user,true
+bob.wilson,bob.wilson@example.com,password123,user,true
+inactive.user,disabled@example.com,password123,user,false

@@ -10,7 +10,7 @@ import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTi
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { setHours, setMinutes, startOfDay, format } from 'date-fns';
+import { setHours, setMinutes, format } from 'date-fns';
 
 interface Booking {
   id: number;
@@ -39,8 +39,8 @@ interface CalendarProps {
   textColor?: string;
 }
 
-const WORKING_HOUR_START = 9;
-const WORKING_HOUR_END = 19;
+// 24-hour availability - no business-hour restriction
+const WORKING_HOUR_END = 24;
 
 export const Calendar: React.FC<CalendarProps> = ({
   bookings,
@@ -108,15 +108,8 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
 
   const constrainToWorkingHours = useCallback((date: Date): Date => {
-    const constrainedDate = new Date(date);
-    const hours = constrainedDate.getHours();
-
-    if (hours < WORKING_HOUR_START) {
-      return setHours(setMinutes(constrainedDate, 0), WORKING_HOUR_START);
-    } else if (hours >= WORKING_HOUR_END) {
-      return setHours(setMinutes(constrainedDate, 0), WORKING_HOUR_END);
-    }
-    return constrainedDate;
+    // 24-hour booking window - all hours/minutes are allowed
+    return date;
   }, []);
 
   const handleDateSelect = useCallback((selectInfo: DateSelectArg) => {
@@ -302,8 +295,11 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   const handleBookButtonClick = () => {
-    const today = new Date();
-    const defaultStart = setHours(setMinutes(startOfDay(today), 0), WORKING_HOUR_START);
+    // Default to the next round 15-minute mark, +1 hour duration
+    const now = new Date();
+    const defaultStart = new Date(now);
+    const minutes = defaultStart.getMinutes();
+    defaultStart.setMinutes(Math.ceil(minutes / 15) * 15, 0, 0);
     const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
 
     setSelectedInfo(null);
@@ -433,10 +429,10 @@ export const Calendar: React.FC<CalendarProps> = ({
       </Box>
       
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Working hours: 9:00 AM - 7:00 PM
+        Available 24 hours · pick any hour, any minute
       </Typography>
       
-      <Box sx={{ 
+      <Box sx={{
         '& .fc': {
           '--fc-border-color': '#e0e0e0',
           '--fc-primary-color': '#1976d2',
@@ -455,6 +451,24 @@ export const Calendar: React.FC<CalendarProps> = ({
           opacity: 0.7,
           cursor: 'grabbing',
         },
+        // Compact view: tighter slots and events to fit 24h
+        '& .fc-timegrid-slot': {
+          height: '24px',
+        },
+        '& .fc-timegrid-slot-label': {
+          fontSize: '0.7rem',
+        },
+        '& .fc-timegrid-event': {
+          padding: '1px 2px',
+          fontSize: '0.7rem',
+        },
+        '& .fc-timegrid-event-harness': {
+          margin: '0 1px',
+        },
+        '& .fc-col-header-cell': {
+          padding: '4px 2px',
+          fontSize: '0.75rem',
+        },
       }}>
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -467,6 +481,8 @@ export const Calendar: React.FC<CalendarProps> = ({
           editable={true}
           selectable={true}
 selectMirror={true}
+          allDaySlot={false}
+          scrollTime="00:00:00"
           dayMaxEvents={true}
           events={events}
           dayHeaderContent={(arg) => format(arg.date, 'EEE, d/M')}
@@ -514,12 +530,14 @@ selectMirror={true}
           select={handleDateSelect}
           eventDrop={handleDragAndDrop}
           eventResize={handleResize}
-          height="600px"
-          slotMinTime={`${WORKING_HOUR_START}:00:00`}
-          slotMaxTime={`${WORKING_HOUR_END}:00:00`}
+          height="640px"
+          slotDuration="00:30:00"
+          slotLabelInterval="01:00"
+          slotMinTime="00:00:00"
+          slotMaxTime="24:00:00"
           selectConstraint={{
-            startTime: `${WORKING_HOUR_START}:00`,
-            endTime: `${WORKING_HOUR_END}:00`,
+            startTime: '00:00',
+            endTime: '24:00',
           }}
         />
       </Box>
@@ -564,6 +582,7 @@ selectMirror={true}
                 onChange={(value) => handleChange('start', value || new Date())}
                 minDateTime={selectedInfo ? constrainToWorkingHours(selectedInfo.start) : undefined}
                 maxDateTime={selectedInfo ? setHours(setMinutes(selectedInfo.start, 0), WORKING_HOUR_END) : undefined}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />
@@ -574,6 +593,7 @@ selectMirror={true}
                 onChange={(value) => handleChange('end', value || new Date())}
                 minDateTime={formData.start}
                 maxDateTime={setHours(setMinutes(formData.start, 0), WORKING_HOUR_END)}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />
@@ -634,6 +654,7 @@ selectMirror={true}
                 onChange={(value) => handleEditChange('start', value || new Date())}
                 minDateTime={constrainToWorkingHours(editFormData.start)}
                 maxDateTime={setHours(setMinutes(editFormData.start, 0), WORKING_HOUR_END)}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />
@@ -644,6 +665,7 @@ selectMirror={true}
                 onChange={(value) => handleEditChange('end', value || new Date())}
                 minDateTime={editFormData.start}
                 maxDateTime={setHours(setMinutes(editFormData.start, 0), WORKING_HOUR_END)}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />

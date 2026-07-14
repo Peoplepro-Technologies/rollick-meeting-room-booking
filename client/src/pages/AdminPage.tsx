@@ -353,7 +353,28 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    // Build an API URL that works on both localhost and host-IP (LAN) access:
+    //  - If VITE_API_URL is relative or unset → use same-origin /api (proxied by Vite/nginx)
+    //  - If VITE_API_URL is absolute and points to localhost/127.0.0.1
+    //    → rewrite the hostname to the current host so LAN access still resolves
+    const envUrl = import.meta.env.VITE_API_URL;
+    let apiUrl: string;
+    if (!envUrl) {
+      apiUrl = '/api';
+    } else if (envUrl.startsWith('/')) {
+      apiUrl = envUrl;
+    } else {
+      try {
+        const u = new URL(envUrl);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+          apiUrl = `${u.protocol}//${window.location.hostname}:${u.port}${u.pathname}`;
+        } else {
+          apiUrl = envUrl;
+        }
+      } catch {
+        apiUrl = envUrl;
+      }
+    }
     window.open(`${apiUrl}/users/template`, '_blank');
   };
 

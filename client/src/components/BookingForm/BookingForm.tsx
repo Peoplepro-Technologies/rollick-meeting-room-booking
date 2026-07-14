@@ -14,7 +14,7 @@ import {
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { setHours, setMinutes, startOfDay } from 'date-fns';
+import { startOfDay, endOfDay } from 'date-fns';
 
 interface BookingFormProps {
   open?: boolean;
@@ -32,19 +32,16 @@ interface BookingFormData {
   end: Date;
 }
 
-// Working hours: 9 AM to 7 PM (21:00)
-const WORKING_HOUR_START = 9;
-const WORKING_HOUR_END = 19;
+// 24-hour booking window - no business-hour restriction
 
-// Helper to constrain time to working hours
-const constrainToWorkingHours = (date: Date): Date => {
-  const hours = date.getHours();
-  if (hours < WORKING_HOUR_START) {
-    return setHours(setMinutes(date, 0), WORKING_HOUR_START);
-  } else if (hours >= WORKING_HOUR_END) {
-    return setHours(setMinutes(date, 0), WORKING_HOUR_END);
-  }
-  return date;
+// Pass-through: all hours/minutes are allowed
+const constrainToWorkingHours = (date: Date): Date => date;
+
+// Default start: round current time up to the next 15-minute mark
+const getDefaultStart = (): Date => {
+  const now = new Date();
+  now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+  return now;
 };
 
 export const BookingForm: React.FC<BookingFormProps> = ({
@@ -55,15 +52,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
    selectedEnd,
    onBookingCreated,
   }) => {
-   const getWorkingHoursStart = (date: Date): Date => {
-     return setHours(setMinutes(startOfDay(date), 0), WORKING_HOUR_START);
-   };
+   const defaultStart = getDefaultStart();
 
    const [formData, setFormData] = useState<BookingFormData>({
      title: '',
      description: '',
-     start: constrainToWorkingHours(selectedStart || getWorkingHoursStart(new Date())),
-     end: constrainToWorkingHours(selectedEnd || new Date(getWorkingHoursStart(new Date()).getTime() + 60 * 60 * 1000)),
+     start: constrainToWorkingHours(selectedStart || defaultStart),
+     end: constrainToWorkingHours(selectedEnd || new Date(defaultStart.getTime() + 60 * 60 * 1000)),
    });
    const [loading, setLoading] = useState(false);
    const [error, setError] = useState<string | null>(null);
@@ -116,11 +111,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
        if (result.success) {
          onBookingCreated(result.data);
          onClose();
+         const nextStart = getDefaultStart();
          setFormData({
            title: '',
            description: '',
-           start: getWorkingHoursStart(new Date()),
-           end: new Date(getWorkingHoursStart(new Date()).getTime() + 60 * 60 * 1000),
+           start: nextStart,
+           end: new Date(nextStart.getTime() + 60 * 60 * 1000),
          });
        } else {
          throw new Error(result.error?.message || 'Failed to create booking');
@@ -166,8 +162,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                 label="Start Time"
                 value={formData.start}
                 onChange={(value) => handleChange('start', value || new Date())}
-                minDateTime={getWorkingHoursStart(new Date())}
-                maxDateTime={setHours(setMinutes(new Date(), 0), WORKING_HOUR_END)}
+                minDateTime={startOfDay(new Date())}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />
@@ -177,14 +173,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                 value={formData.end}
                 onChange={(value) => handleChange('end', value || new Date())}
                 minDateTime={formData.start}
-                maxDateTime={setHours(setMinutes(formData.start, 0), WORKING_HOUR_END)}
+                maxDateTime={endOfDay(formData.start)}
+                timeSteps={{ hours: 1, minutes: 1 }}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
                 ampm={false}
               />
             </LocalizationProvider>
             
             <Typography variant="body2" color="text.secondary">
-              Working hours: 9:00 AM - 7:00 PM
+              Available 24 hours · pick any hour, any minute
             </Typography>
           </Box>
         </DialogContent>

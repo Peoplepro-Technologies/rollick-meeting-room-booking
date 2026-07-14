@@ -1,5 +1,11 @@
 # ---------- Build stage ----------
-FROM node:20-alpine AS builder
+# Avoid Alpine (musl libc) because the sqlite3@5.x prebuilt binary targets
+# glibc and `npm rebuild --build-from-source` (the only way to recompile for
+# musl) requires node-gyp to fetch Node headers from unofficial-builds.nodejs.org
+# — frequently unreachable from restricted build networks (original build failure).
+# We also pin a clean npm cache so the sqlite3 prebuild is fetched fresh and
+# the resulting binary actually loads.
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -10,14 +16,17 @@ RUN cd client && npm install --no-audit --no-fund
 COPY client/ ./client/
 RUN cd client && npx vite build
 
-# Install server deps (production only)
+# Install server deps (production only). Force a fresh, isolated npm cache so
+# the sqlite3 NAPI prebuilt download is reproducible and the binary actually
+# loads (the builder cache can otherwise return a stale binary for this host).
 COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm install --omit=dev --no-audit --no-fund
+RUN cd server && npm_config_cache=/tmp/npmc \
+    && npm install --omit=dev --no-audit --no-fund --foreground-scripts
 
 COPY server/ ./server/
 
 # ---------- Runtime stage ----------
-FROM node:20-alpine AS runtime
+FROM node:20-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     PORT=5000 \
@@ -26,13 +35,14 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Runtime tools + native build deps to compile sqlite3 against musl
-RUN apk add --no-cache curl python3 py3-setuptools make g++ \
-    && addgroup -S app && adduser -S app -G app
+# Runtime needs only curl (for HEALTHCHECK) and a non-root user.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system app && adduser --system --ingroup app app
 
-# Copy server with deps and rebuild sqlite3 for this Node ABI / musl libc
+# Copy server (with prebuilt sqlite3 binary) and the built client.
 COPY --from=builder /app/server ./server
-RUN cd /app/server && npm rebuild sqlite3 --build-from-source
 COPY --from=builder /app/client/dist ./client/dist
 
 # Persistent storage directory (created on first run by the entrypoint)

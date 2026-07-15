@@ -1,10 +1,10 @@
 # ---------- Build stage ----------
-# Avoid Alpine (musl libc) because the sqlite3@5.x prebuilt binary targets
-# glibc and `npm rebuild --build-from-source` (the only way to recompile for
-# musl) requires node-gyp to fetch Node headers from unofficial-builds.nodejs.org
-# — frequently unreachable from restricted build networks (original build failure).
-# We also pin a clean npm cache so the sqlite3 prebuild is fetched fresh and
-# the resulting binary actually loads.
+# Builder must match runtime's glibc (Bookworm = 2.36). sqlite3@5.1.7 NAPI
+# prebuilds on npm are linked against newer glibc (2.38+) and crash on
+# container start with `GLIBC_2.38' not found`. We therefore compile
+# sqlite3 from source against Bookworm's toolchain so the binary is
+# guaranteed to load in the runtime stage. node-gyp only needs python3 +
+# make + g++ which we install below, then discard before the runtime stage.
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
@@ -16,13 +16,25 @@ RUN cd client && npm install --no-audit --no-fund
 COPY client/ ./client/
 RUN cd client && npx vite build
 
-# Install server deps (production only). Force a fresh, isolated npm cache so
-# the sqlite3 NAPI prebuilt download is reproducible and the binary actually
-# loads (the builder cache can otherwise return a stale binary for this host).
+# Install server deps (production only).
+# Skip lifecycle scripts so sqlite3's `prebuild-install` does NOT download
+# a glibc-2.38 NAPI prebuild (sqlite3@5.1.7 prebuilds crash on Bookworm's
+# glibc 2.36). We then build sqlite3 from source against Bookworm's
+# toolchain, guaranteeing the binary is linked against glibc 2.36.
 COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm_config_cache=/tmp/npmc \
-    && npm install --omit=dev --no-audit --no-fund --foreground-scripts
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && cd server \
+    && rm -rf /tmp/npmc && mkdir -p /tmp/npmc \
+    && npm_config_cache=/tmp/npmc \
+       npm install --omit=dev --no-audit --no-fund --foreground-scripts --ignore-scripts \
+    && npm_config_cache=/tmp/npmc \
+       npm rebuild sqlite3 --build-from-source --foreground-scripts \
+    && node -e "const s=require('sqlite3'); new s.Database(':memory:').exec('CREATE TABLE t(x INT); INSERT INTO t VALUES(1)'); console.log('sqlite3 ok')"
 
+# Copy the rest of the server source. `.dockerignore` already excludes
+# `node_modules` so the freshly-installed deps above are preserved.
 COPY server/ ./server/
 
 # ---------- Runtime stage ----------

@@ -71,7 +71,10 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), (
   }
 
   const results = [];
-  const filePath = path.join(__dirname, '../../uploads', req.file.filename);
+  // multer wrote the file to process.env.UPLOADS_DIR (defaults to
+  // server/uploads in dev, /data/uploads in Docker). Use req.file.path
+  // directly so we don't depend on a hardcoded sibling directory.
+  const filePath = req.file.path;
 
   // Read and parse file based on extension
   const fileExt = path.extname(filePath).toLowerCase();
@@ -567,8 +570,11 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Download user template
-router.get('/template', (req, res) => {
+// Download user template (admin-only, mirrors the upload endpoint).
+// Auth is required: the client sends the bearer token via fetch and saves
+// the file via a blob URL, so an admin trigger never opens the URL in a
+// new tab (which would have no auth header and fail).
+router.get('/template', authenticateToken, requireAdmin, (req, res) => {
   const templatePath = path.join(__dirname, '../../sample-users.csv');
 
   if (fs.existsSync(templatePath)) {

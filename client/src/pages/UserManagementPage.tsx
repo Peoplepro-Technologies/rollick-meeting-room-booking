@@ -22,7 +22,7 @@ import {
   Chip,
   Alert,
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowBack, Block, Check, Upload } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowBack, Block, Check, Upload, Download } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -52,6 +52,7 @@ export const UserManagementPage: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -163,8 +164,9 @@ export const UserManagementPage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
-      setError('Please upload a CSV file');
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx')) {
+      setError('Please upload a CSV or Excel file');
       return;
     }
 
@@ -215,6 +217,51 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      const response = await fetch(`${apiBase}/users/template`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to download template';
+        try {
+          const data = await response.json();
+          message = data.error?.message || message;
+        } catch {
+          // response wasn't JSON — keep default message
+        }
+        throw new Error(message);
+      }
+
+      // Pull a filename from Content-Disposition if the server set one,
+      // otherwise fall back to a sensible default.
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = /filename="?([^"]+)"?/i.exec(disposition);
+      const filename = match?.[1] || 'user-template.csv';
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      setError(error.message || 'Failed to download template');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -255,6 +302,14 @@ export const UserManagementPage: React.FC = () => {
           <Box display="flex" gap={2}>
             <Button
               variant="outlined"
+              startIcon={<Download />}
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate || uploading}
+            >
+              {downloadingTemplate ? 'Downloading...' : 'Download Template'}
+            </Button>
+            <Button
+              variant="outlined"
               component="label"
               startIcon={<Upload />}
               disabled={uploading}
@@ -262,7 +317,7 @@ export const UserManagementPage: React.FC = () => {
               {uploading ? 'Uploading...' : 'Upload User List'}
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx"
                 hidden
                 onChange={handleFileUpload}
                 disabled={uploading}

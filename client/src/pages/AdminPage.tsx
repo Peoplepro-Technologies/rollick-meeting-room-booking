@@ -352,7 +352,7 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     // Build an API URL that works on both localhost and host-IP (LAN) access:
     //  - If VITE_API_URL is relative or unset → use same-origin /api (proxied by Vite/nginx)
     //  - If VITE_API_URL is absolute and points to localhost/127.0.0.1
@@ -375,7 +375,44 @@ export const AdminPage: React.FC = () => {
         apiUrl = envUrl;
       }
     }
-    window.open(`${apiUrl}/users/template`, '_blank');
+
+    try {
+      // Fetch as a blob so the browser actually downloads the file instead
+      // of opening the JSON error response in a new tab. Falls back to the
+      // server's Content-Disposition filename when available.
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiUrl}/users/template`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      if (!response.ok) {
+        let message = 'Failed to download template';
+        try {
+          const data = await response.json();
+          message = data.error?.message || message;
+        } catch {
+          // response wasn't JSON — keep default message
+        }
+        throw new Error(message);
+      }
+
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = /filename="?([^"]+)"?/i.exec(disposition);
+      const filename = match?.[1] || 'user-template.csv';
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || 'Failed to download template');
+    }
   };
 
   // ---------- Render ----------

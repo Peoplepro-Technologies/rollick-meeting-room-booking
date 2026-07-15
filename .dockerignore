@@ -28,6 +28,10 @@ sample-user-template.csv
 sample-user-template.xlsx
 test-users.csv
 test-users-template.xlsx
+
+# Keep the seed template that the API serves from /api/users/template.
+# Other sample/test variants remain excluded to slim the image.
+!server/sample-users.csv
 test-api.js
 test-upload.html
 test-upload.mjs
